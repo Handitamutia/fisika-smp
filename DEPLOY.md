@@ -40,6 +40,11 @@ frontend dan API ada dalam satu domain.
    `/api/student`; tidak ada konfigurasi Apps Script atau URL `/exec`.
 4. Buka domain Vercel dari ponsel dan lakukan uji satu akun siswa.
 
+Sebelum menguji kuis, buka `https://domain-anda.vercel.app/api/health`. Respons
+harus berbunyi `"configured": true`. Jika bernilai `false`, buka Settings >
+Environment Variables, isi kedua variabel di atas untuk environment Production,
+lalu lakukan redeploy.
+
 Vercel Functions mendukung JavaScript pada folder `api`, dan environment
 variable dipakai untuk data sensitif. Lihat dokumentasi resmi
 [Vercel Functions](https://vercel.com/docs/functions) dan

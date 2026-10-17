@@ -430,14 +430,20 @@
 
         // API Vercel menyimpan kredensial Google Sheets di server, bukan browser.
         function saveStudent(payload) {
-            const apiBaseUrl = window.APP_CONFIG?.apiBaseUrl || '';
-            return fetch(`${apiBaseUrl}/api/student`, {
+            const apiBaseUrl = (window.APP_CONFIG?.apiBaseUrl || '').replace(/\/$/, '');
+            if (window.location.protocol === 'file:' && !apiBaseUrl) {
+                return Promise.reject(new Error('Halaman dibuka sebagai file lokal. Deploy ke Vercel atau isi apiBaseUrl di config.js.'));
+            }
+            const endpoint = `${apiBaseUrl}/api/student`;
+            return fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             }).then(async (response) => {
                 const result = await response.json().catch(() => null);
-                if (!response.ok || !result) throw new Error(result?.message || 'Server tidak dapat dihubungi.');
+                if (!response.ok || !result) {
+                    throw new Error(result?.message || `Endpoint API tidak ditemukan atau tidak valid (${response.status}).`);
+                }
                 return result;
             });
         }
@@ -528,7 +534,7 @@
 
             } catch (err) {
                 console.error(err);
-                showModal('fas fa-wifi', 'Koneksi Gagal', 'Gagal terhubung ke database. Periksa koneksi, deployment Vercel, dan konfigurasi API.', 'text-red-500');
+                showModal('fas fa-wifi', 'Koneksi Gagal', err?.message || 'Gagal terhubung ke database. Periksa deployment Vercel dan konfigurasi API.', 'text-red-500');
                 document.getElementById('login-form').classList.remove('hidden');
                 document.getElementById('loading-auth').classList.add('hidden');
             }
@@ -763,7 +769,7 @@
                     
                 } catch(e) {
                     console.error(e);
-                    showModal('fas fa-times-circle', 'Gagal Menyimpan', 'Terjadi kesalahan jaringan. Cek koneksi internetmu.', 'text-red-500');
+                    showModal('fas fa-times-circle', 'Gagal Menyimpan', e?.message || 'Terjadi kesalahan jaringan. Cek koneksi internetmu.', 'text-red-500');
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                 }

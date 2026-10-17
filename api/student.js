@@ -102,6 +102,16 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, data: studentFromRow(row) });
   } catch (error) {
     console.error('student API error', error);
+    const message = error?.message || '';
+    if (message.includes('Konfigurasi Google Sheets belum lengkap')) {
+      return res.status(500).json({ success: false, message: 'Server belum dikonfigurasi: isi GOOGLE_SHEETS_ID dan GOOGLE_SERVICE_ACCOUNT_JSON di Vercel, lalu redeploy.' });
+    }
+    if (error?.code === 401 || error?.code === 403) {
+      return res.status(500).json({ success: false, message: 'Google Sheets menolak akses API. Bagikan spreadsheet kepada client_email service account sebagai Editor.' });
+    }
+    if (error?.code === 404) {
+      return res.status(500).json({ success: false, message: 'Spreadsheet atau sheet DataSiswa tidak ditemukan. Periksa GOOGLE_SHEETS_ID.' });
+    }
     return res.status(500).json({ success: false, message: 'Data tidak dapat disimpan. Coba lagi.' });
   }
 }
