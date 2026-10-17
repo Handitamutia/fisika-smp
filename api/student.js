@@ -7,20 +7,39 @@ function email(value) {
 }
 function className(value) { return ['9A', '9B', '9C', '9D'].includes(value) ? value : '-'; }
 function score(value) {
-  if (value === undefined || value === null || value === '') return undefined;
-  const result = Number(value);
+  // SteinHQ dapat mengembalikan sel kosong sebagai string berisi spasi.
+  // Jangan mengubahnya menjadi Number(' ') === 0, karena 0 adalah nilai kuis
+  // yang sah dan berarti bab sudah benar-benar dikerjakan.
+  if (value === undefined || value === null || String(value).trim() === '') return undefined;
+  const result = Number(String(value).trim());
   return Number.isFinite(result) && result >= 0 && result <= 100 ? result : undefined;
 }
 function now() { return new Intl.DateTimeFormat('id-ID', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Asia/Jakarta' }).format(new Date()); }
-function emptyToNull(value) { return value === '' || value === undefined || value === null ? null : value; }
+function storedScore(value) {
+  const result = score(value);
+  return result === undefined ? null : result;
+}
+function learningStatus(scores) {
+  const hydroDone = scores.hydro !== null;
+  const pascalDone = scores.pascal !== null;
+  const archimedesDone = scores.archimedes !== null;
+  if (hydroDone && pascalDone && archimedesDone) return 'Telah Menyelesaikan Semua Materi';
+  if (hydroDone && pascalDone) return 'Selesai Bab 2, Lanjut Bab 3';
+  if (hydroDone) return 'Selesai Bab 1, Lanjut Bab 2';
+  return 'Sedang Belajar (Bab 1)';
+}
 function toStudent(row) {
+  const scores = {
+    hydro: storedScore(row['Nilai Hidrostatis']),
+    pascal: storedScore(row['Nilai Pascal']),
+    archimedes: storedScore(row['Nilai Archimedes'])
+  };
   return {
     uid: row.Email, name: row.Nama, className: row.Kelas, status: row.Status,
-    scores: {
-      hydro: emptyToNull(row['Nilai Hidrostatis']),
-      pascal: emptyToNull(row['Nilai Pascal']),
-      archimedes: emptyToNull(row['Nilai Archimedes'])
-    }
+    scores,
+    // Status selalu dihitung kembali dari tiga nilai yang valid. Dengan ini
+    // teks status lama atau sel Sheet yang tidak valid tidak bisa membuka bab.
+    status: learningStatus(scores)
   };
 }
 
@@ -36,7 +55,7 @@ export default async function handler(req, res) {
     if (!Array.isArray(found) || found.length === 0) {
       const row = {
         Email: uid, Nama: text(data.name, 80) || 'Siswa', Kelas: className(data.className),
-        Status: text(data.status, 100) || 'Sedang Belajar (Bab 1)',
+        Status: 'Sedang Belajar (Bab 1)',
         'Nilai Hidrostatis': '', 'Nilai Pascal': '', 'Nilai Archimedes': '', Diperbarui: now()
       };
       await appendStudent(row);
@@ -45,13 +64,14 @@ export default async function handler(req, res) {
 
     const current = found[0];
     const set = { Diperbarui: now() };
-    if (data.status) set.Status = text(data.status, 100);
     const incoming = data.scores || {};
     const hydro = score(incoming.hydro); if (hydro !== undefined) set['Nilai Hidrostatis'] = hydro;
     const pascal = score(incoming.pascal); if (pascal !== undefined) set['Nilai Pascal'] = pascal;
     const archimedes = score(incoming.archimedes); if (archimedes !== undefined) set['Nilai Archimedes'] = archimedes;
+    const saved = toStudent({ ...current, ...set });
+    set.Status = saved.status;
     await updateStudent(uid, set);
-    return res.status(200).json({ success: true, data: toStudent({ ...current, ...set }) });
+    return res.status(200).json({ success: true, data: saved });
   } catch (error) {
     console.error('student API error', { status: error?.status, message: error?.message });
     const message = error?.status === 401 ? 'SteinHQ menolak kredensial API. Periksa STEIN_USERNAME dan STEIN_PASSWORD di Vercel.'
