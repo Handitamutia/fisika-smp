@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Rekap Nilai Guru</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-800 p-4 sm:p-6">
+  <main class="max-w-6xl mx-auto">
+    <a href="index.html" class="inline-flex items-center min-h-[44px] text-blue-700 font-semibold mb-5"><i class="fas fa-arrow-left mr-2"></i>Kembali ke materi</a>
+
+    <section id="login-card" class="max-w-md mx-auto mt-10 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <div class="text-center mb-6">
+        <i class="fas fa-chalkboard-teacher text-4xl text-purple-600 mb-3"></i>
+        <h1 class="text-2xl font-bold">Akses Guru</h1>
+        <p class="text-sm text-slate-500 mt-2">Masukkan kode guru untuk melihat rekap nilai.</p>
+      </div>
+      <label for="teacher-password" class="block text-sm font-semibold mb-2">Kode Guru</label>
+      <input id="teacher-password" type="password" autocomplete="current-password" class="w-full min-h-[44px] rounded-lg border-2 border-slate-300 px-3 focus:outline-none focus:border-purple-500" placeholder="Masukkan kode guru">
+      <p id="login-error" class="hidden text-sm text-red-600 mt-3" role="alert"></p>
+      <button id="login-button" class="mt-5 w-full min-h-[44px] rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold transition-colors">Buka Rekap Nilai</button>
+    </section>
+
+    <section id="dashboard" class="hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-7">
+        <div class="flex flex-col sm:flex-row gap-4 justify-between sm:items-center border-b border-slate-100 pb-5 mb-5">
+          <div>
+            <h1 class="text-2xl font-bold text-purple-700"><i class="fas fa-table mr-2"></i>Rekap Nilai Siswa</h1>
+            <p id="summary" class="text-sm text-slate-500 mt-1"></p>
+          </div>
+          <div class="flex gap-2">
+            <select id="class-filter" class="min-h-[44px] rounded-lg border border-slate-300 px-3 text-sm font-semibold"><option value="all">Semua kelas</option><option>9A</option><option>9B</option><option>9C</option><option>9D</option></select>
+            <button id="refresh-button" class="min-h-[44px] rounded-lg bg-purple-100 px-4 font-semibold text-purple-700"><i class="fas fa-sync-alt mr-1"></i>Perbarui</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+          <table class="min-w-[760px] w-full text-sm">
+            <thead class="bg-purple-50 text-slate-700"><tr><th class="p-3 text-left">Nama</th><th class="p-3 text-center">Kelas</th><th class="p-3 text-left">Status</th><th class="p-3 text-center">Hidrostatis</th><th class="p-3 text-center">Pascal</th><th class="p-3 text-center">Archimedes</th><th class="p-3 text-left">Diperbarui</th></tr></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let teacherPassword = '';
+    let students = [];
+    const errorBox = document.getElementById('login-error');
+    const loginButton = document.getElementById('login-button');
+
+    function escapeText(value) { return String(value ?? '-'); }
+    function score(value) { return value === '' || value === undefined ? '-' : value; }
+    function render() {
+      const selected = document.getElementById('class-filter').value;
+      const filtered = selected === 'all' ? students : students.filter((student) => student.Kelas === selected);
+      document.getElementById('summary').textContent = `${filtered.length} siswa ditampilkan`;
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = '';
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-500">Belum ada data siswa.</td></tr>';
+        return;
+      }
+      filtered.forEach((student) => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-slate-100';
+        [student.Nama, student.Kelas, student.Status, score(student['Nilai Hidrostatis']), score(student['Nilai Pascal']), score(student['Nilai Archimedes']), student.Diperbarui].forEach((value, index) => {
+          const td = document.createElement('td');
+          td.className = `p-3 ${index === 1 || (index >= 3 && index <= 5) ? 'text-center' : ''}`;
+          td.textContent = escapeText(value);
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadStudents() {
+      const response = await fetch('/api/teacher', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: teacherPassword }) });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) throw new Error(result?.message || 'Rekap nilai tidak dapat dimuat.');
+      students = result.data;
+      render();
+    }
+
+    async function login() {
+      teacherPassword = document.getElementById('teacher-password').value;
+      errorBox.classList.add('hidden');
+      loginButton.disabled = true;
+      loginButton.textContent = 'Memuat...';
+      try {
+        await loadStudents();
+        document.getElementById('login-card').classList.add('hidden');
+        document.getElementById('dashboard').classList.remove('hidden');
+      } catch (error) {
+        errorBox.textContent = error.message;
+        errorBox.classList.remove('hidden');
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = 'Buka Rekap Nilai';
+      }
+    }
+    loginButton.addEventListener('click', login);
+    document.getElementById('teacher-password').addEventListener('keydown', (event) => { if (event.key === 'Enter') login(); });
+    document.getElementById('class-filter').addEventListener('change', render);
+    document.getElementById('refresh-button').addEventListener('click', async () => {
+      const button = document.getElementById('refresh-button'); button.disabled = true;
+      try { await loadStudents(); } catch (error) { alert(error.message); } finally { button.disabled = false; }
+    });
+  </script>
+</body>
+</html>

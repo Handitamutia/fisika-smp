@@ -1,81 +1,61 @@
-# Deploy tanpa Google Apps Script
+# Deploy Vercel + SteinHQ
 
-Proyek ini memakai **Vercel** sebagai hosting dan API serverless. API Vercel
-berbicara ke Google Sheets API menggunakan service account; browser siswa tidak
-pernah menerima kunci Google. Ini adalah pilihan yang direkomendasikan karena
-frontend dan API ada dalam satu domain.
+Proyek ini tidak menggunakan Google Apps Script atau Google Cloud. Vercel
+menyajikan halaman siswa/guru dan bertindak sebagai proxy aman ke SteinHQ.
+SteinHQ kemudian terhubung ke Google Sheet Anda.
 
-## Struktur proyek
+## Persiapan SteinHQ
 
-- `index.html` — halaman belajar yang dapat dibuka siswa.
-- `api/student.js` — API serverless untuk membuat/memperbarui progres siswa.
-- `config.js` — URL API; kosong untuk Vercel, diisi hanya bila memakai GitHub
-  Pages sebagai hosting frontend.
-- `.env.example` — daftar environment variable, tanpa rahasia asli.
+1. Masuk ke SteinHQ dan buat API dari Google Sheet Anda.
+2. Pastikan tab yang dipakai bernama `DataSiswa` (atau catat nama lainnya).
+3. Baris pertama tab harus berisi header berikut, persis sama:
 
-## Persiapan Google Cloud (sekali saja)
-
-1. Masuk ke [Google Cloud Console](https://console.cloud.google.com/), buat
-   proyek baru, lalu aktifkan **Google Sheets API** di menu APIs & Services.
-2. Buat **Service Account** pada IAM & Admin > Service Accounts.
-3. Buat key jenis **JSON** untuk service account tersebut dan unduh. Jangan
-   commit atau kirim file JSON ini lewat grup chat.
-4. Buka spreadsheet Anda, klik **Share**, lalu tambahkan alamat `client_email`
-   dari file JSON sebagai **Editor**. Spreadsheet boleh tetap *Restricted*;
-   siswa tidak perlu dan tidak boleh memperoleh akses langsung.
-
-## Deploy Vercel (disarankan)
-
-1. Unggah folder proyek ke repositori GitHub pribadi atau publik tanpa file
-   key JSON, kemudian impor repositori itu di [Vercel](https://vercel.com).
-2. Di Vercel > Project > Settings > Environment Variables, masukkan:
-
-   | Nama | Nilai |
-   | --- | --- |
-   | `GOOGLE_SHEETS_ID` | `19fkE92s-FRB7D_KrItZROGd9VLF9rdvc8KILRmrysVc` |
-   | `GOOGLE_SERVICE_ACCOUNT_JSON` | seluruh isi file key JSON service account, satu nilai utuh |
-
-   `ALLOWED_ORIGIN` tidak perlu diisi bila frontend juga berada di Vercel.
-3. Deploy. Vercel memasang `api/student.js` otomatis sebagai endpoint
-   `/api/student`; tidak ada konfigurasi Apps Script atau URL `/exec`.
-4. Buka domain Vercel dari ponsel dan lakukan uji satu akun siswa.
-
-Sebelum menguji kuis, buka `https://domain-anda.vercel.app/api/health`. Respons
-harus berbunyi `"configured": true`. Jika bernilai `false`, buka Settings >
-Environment Variables, isi kedua variabel di atas untuk environment Production,
-lalu lakukan redeploy.
-
-Vercel Functions mendukung JavaScript pada folder `api`, dan environment
-variable dipakai untuk data sensitif. Lihat dokumentasi resmi
-[Vercel Functions](https://vercel.com/docs/functions) dan
-[Vercel environment variables](https://vercel.com/docs/environment-variables).
-
-## Opsi GitHub Pages
-
-GitHub Pages hanya dapat menyajikan HTML/CSS/JavaScript statis; ia **tidak bisa
-menjaga service-account key atau menjalankan API**. Maka jika ingin URL halaman
-berasal dari GitHub Pages:
-
-1. Deploy API/repo yang sama ke Vercel terlebih dahulu.
-2. Isi `config.js` dengan domain Vercel, misalnya:
-
-   ```js
-   window.APP_CONFIG = { apiBaseUrl: 'https://fisika-smp.vercel.app' };
+   ```text
+   Email | Nama | Kelas | Status | Nilai Hidrostatis | Nilai Pascal | Nilai Archimedes | Diperbarui
    ```
 
-3. Di Vercel, tambahkan `ALLOWED_ORIGIN` dengan origin GitHub Pages Anda,
-   contoh `https://namapengguna.github.io`, lalu redeploy.
-4. Aktifkan GitHub Pages dari branch yang berisi `index.html`, `config.js`, dan
-   aset halaman.
+4. Aktifkan Basic Authentication di SteinHQ bila tersedia dan catat username
+   serta password-nya. Jangan taruh kredensial itu pada `index.html`.
 
-## Uji dan privasi
+URL SteinHQ yang dipakai proyek ini sudah disetel ke:
 
-1. Buka halaman melalui mode incognito di ponsel.
-2. Isi identitas uji dan simpan satu kuis; periksa baris pada `DataSiswa`.
-3. Buka ulang dengan email sama; progres harus tetap ada.
-4. Jangan membuat spreadsheet menjadi public. Guru melihat rekap langsung dari
-   Google Sheets dengan akun yang memiliki izin.
+```text
+https://api.steinhq.com/v1/storages/6ad38b9d92b1163e975592e3
+```
 
-Email pada aplikasi ini masih merupakan penanda progres, bukan login Google
-terverifikasi. Nilai latihan dapat dimanipulasi lewat browser, jadi untuk ujian
-resmi gunakan autentikasi siswa yang sebenarnya atau LMS/Classroom.
+## Environment Variables Vercel
+
+Pada Vercel > Project > Settings > Environment Variables, isi untuk
+**Production**:
+
+| Nama | Wajib | Nilai |
+| --- | --- | --- |
+| `STEIN_API_URL` | Ya | URL storage SteinHQ di atas |
+| `STEIN_SHEET_NAME` | Ya | `DataSiswa` atau nama tab Anda |
+| `TEACHER_PASSWORD` | Ya | Kode panjang dan unik untuk login guru |
+| `STEIN_USERNAME` | Jika Basic Auth aktif | Username SteinHQ |
+| `STEIN_PASSWORD` | Jika Basic Auth aktif | Password SteinHQ |
+
+Setelah mengisi atau mengubah variable, lakukan redeploy. Variable baru hanya
+berlaku pada deployment baru.
+
+## Halaman aplikasi
+
+- `/` atau `index.html` — halaman siswa.
+- `/guru.html` — halaman login dan rekap nilai guru.
+- `/api/health` — pemeriksaan konfigurasi dasar, tanpa menampilkan rahasia.
+
+Tombol **Masuk sebagai Guru** pada halaman siswa membuka `/guru.html`. Kode
+guru diproses Vercel dan tidak disimpan di JavaScript frontend.
+
+## Uji
+
+1. Buka `https://domain-anda.vercel.app/api/health`; pastikan
+   `teacherLoginConfigured` bernilai `true`.
+2. Buka halaman siswa di mode incognito, isi identitas, lalu selesaikan kuis.
+3. Buka `/guru.html`, masukkan `TEACHER_PASSWORD`, dan periksa nilai muncul.
+4. Bila data tidak muncul, cek nama tab dan header Google Sheet di atas, lalu
+   buka Vercel > Logs untuk melihat `student API error` atau `teacher API error`.
+
+Jangan membagikan URL editor Google Sheet, password guru, atau kredensial
+SteinHQ kepada siswa.
