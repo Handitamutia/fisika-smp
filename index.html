@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Belajar Fisika: Fluida Statis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        .tank-container {
+            position: relative; width: 100%; max-width: 300px; height: 250px; background-color: #e0f2fe;
+            border: 4px solid #94a3b8; border-top: none; border-radius: 0 0 10px 10px; overflow: hidden; margin: 0 auto;
+        }
+        .liquid {
+            position: absolute; bottom: 0; width: 100%; height: 100%;
+            background-color: #3b82f6; transition: all 0.3s ease;
+        }
+        .sensor {
+            position: absolute; left: 50%; transform: translateX(-50%); width: 40px; height: 40px;
+            background-color: #ef4444; border-radius: 50%; border: 3px solid white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: bold; font-size: 12px; transition: top 0.1s ease; z-index: 10;
+        }
+        .ruler {
+            position: absolute; left: 10px; top: 0; height: 100%; width: 20px;
+            border-right: 2px solid #1e293b; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 20px; z-index: 5;
+        }
+        .ruler-mark { width: 100%; border-bottom: 1px solid #1e293b; text-align: right; padding-right: 4px; font-size: 10px; font-weight: bold; }
+        
+        .pascal-system { display: flex; align-items: flex-end; justify-content: center; height: 200px; padding-bottom: 20px; width: 100%; overflow-x: auto;}
+        .piston-tube { background: #bfdbfe; border: 3px solid #64748b; border-top: none; position: relative; display: flex; flex-direction: column; justify-content: flex-end; }
+        .piston { background: #475569; width: 100%; border-radius: 4px 4px 0 0; transition: height 0.3s ease; position: relative; }
+        .weight { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; transition: bottom 0.3s ease; white-space: nowrap; }
+        .pipe-connector { width: 60px; height: 30px; background: #bfdbfe; border-bottom: 3px solid #64748b; border-top: 3px solid #64748b; flex-shrink: 0; }
+        @media (min-width: 768px) { .pipe-connector { width: 100px; } }
+
+        .archimedes-tank { position: relative; width: 100%; max-width: 150px; height: 200px; background: #e0f2fe; border: 4px solid #94a3b8; border-top: none; border-radius: 0 0 10px 10px; overflow: hidden; margin: 0 auto;}
+        .archimedes-liquid { position: absolute; bottom: 0; width: 100%; height: 70%; background: #3b82f6; transition: background-color 0.3s ease; }
+        .archimedes-object { position: absolute; left: 50%; transform: translateX(-50%); width: 60px; height: 60px; background: #8b5cf6; border: 2px solid #5b21b6; border-radius: 8px; transition: bottom 0.5s bounce; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 10px; text-align: center; }
+
+        .hidden-section { display: none !important; }
+        .locked-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(255,255,255,0.8); backdrop-filter: blur(4px); z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 0.75rem;}
+        
+        /* Modal */
+        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem;}
+        
+        /* Hide scrollbar for mobile nav */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Ponsel: biarkan halaman utama melakukan scroll alami dan beri ruang
+           untuk notch/home indicator. Ukuran kontrol minimum memudahkan tap. */
+        button, input, select { min-height: 44px; }
+        @media (max-width: 767px) {
+            body { overflow-x: hidden; }
+            .tank-container { max-width: min(300px, 82vw); height: 220px; }
+            .pascal-system { justify-content: flex-start; padding-inline: .5rem; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="auth-screen" class="fixed inset-0 bg-blue-600 flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div class="text-center mb-6">
+                <i class="fas fa-graduation-cap text-4xl text-blue-600 mb-2"></i>
+                <h1 class="text-2xl font-bold text-slate-800">Materi Interaktif Fisika</h1>
+                <p class="text-sm text-slate-500">Kelas 9 - Fluida Statis</p>
+            </div>
+            
+            <div id="login-form">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Email Siswa <span class="text-red-500">*</span></label>
+                <input type="email" id="studentEmail" class="w-full border-2 border-gray-300 rounded-lg p-3 mb-3 focus:outline-none focus:border-blue-500 text-sm" placeholder="Gunakan email untuk simpan sesi">
+                
+                <label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap Siswa</label>
+                <input type="text" id="studentName" class="w-full border-2 border-gray-300 rounded-lg p-3 mb-3 focus:outline-none focus:border-blue-500 text-sm" placeholder="Contoh: Budi Santoso">
+                
+                <label class="block text-sm font-medium text-gray-700 mb-1">Kelas</label>
+                <select id="studentClass" class="w-full border-2 border-gray-300 rounded-lg p-3 mb-5 focus:outline-none focus:border-blue-500 text-sm">
+                    <option value="9A">9A</option>
+                    <option value="9B">9B</option>
+                    <option value="9C">9C</option>
+                    <option value="9D">9D</option>
+                </select>
+                
+                <button onclick="loginAsStudent()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors mb-4 text-sm md:text-base">
+                    Mulai Belajar
+                </button>
+
+                <div class="border-t border-gray-200 my-5 relative">
+                    <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-2 text-xs text-gray-400">Atau</span>
+                </div>
+                
+                <p class="text-xs text-center text-gray-500 leading-relaxed">Guru dapat melihat rekap nilai langsung dari Google Sheets. Rekap tidak ditampilkan di halaman siswa agar data pribadi tetap terlindungi.</p>
+            </div>
+            
+            <div id="loading-auth" class="hidden text-center py-8">
+                <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+                <p class="text-slate-600 font-medium">Memuat profil dan materi...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden-section flex-1 flex flex-col md:flex-row w-full min-h-[100dvh] md:h-screen md:overflow-hidden">
+        
+        <!-- Sidebar Navigation (Sticky Top on Mobile) -->
+        <nav class="bg-white w-full md:w-72 shadow-md z-20 flex flex-col md:h-screen flex-shrink-0 sticky top-0 md:static">
+            <!-- User Info Area -->
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center md:flex-col md:items-start md:border-b-0">
+                <div>
+                    <p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1 hidden md:block">Masuk sebagai</p>
+                    <p id="nav-user-name" class="font-bold text-sm md:text-lg text-blue-700 truncate"><i class="fas fa-user-circle mr-2"></i>Siswa</p>
+                </div>
+                <button onclick="logout()" class="text-xs text-red-500 hover:text-red-700 font-medium bg-red-50 px-3 py-1.5 rounded-md md:mt-3 md:bg-transparent md:p-0 md:underline"><i class="fas fa-sign-out-alt mr-1"></i>Keluar</button>
+            </div>
+
+            <!-- Navigation Buttons (Horizontal scroll on mobile, vertical on desktop) -->
+            <div class="px-4 py-3 md:py-0 md:px-4 md:flex-1 md:overflow-y-auto no-scrollbar border-b md:border-b-0 border-gray-100">
+                <div class="flex flex-row md:flex-col gap-2 overflow-x-auto no-scrollbar" id="nav-menu">
+                    <!-- Nav items generated dynamically -->
+                </div>
+                
+                <!-- Progress Bar (Visible on Desktop, hidden on mobile header) -->
+                <div id="student-progress-widget" class="hidden md:block mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                    <p class="text-sm font-bold text-blue-800 mb-2">Progres Belajar</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2 mb-1">
+                        <div id="progress-bar-fill" class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <p id="progress-text" class="text-xs text-right text-gray-500 font-medium">0%</p>
+                </div>
+            </div>
+        </nav>
+
+        <main class="flex-1 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-8 md:overflow-y-auto bg-slate-50 relative w-full">
+            
+            <!-- SECTION 1: HIDROSTATIS -->
+            <section id="section-hydro" class="content-section bg-white p-5 md:p-8 rounded-2xl shadow-sm border border-slate-100 mb-8 max-w-4xl mx-auto relative">
+                <h2 class="text-2xl md:text-3xl font-bold text-blue-700 mb-2 border-b-2 border-blue-50 pb-3">Bab 1: Tekanan Hidrostatis</h2>
+                
+                <div class="mb-6 mt-5 p-4 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 rounded-r-lg">
+                    <p class="font-bold flex items-center gap-2 text-sm md:text-base"><i class="fas fa-lightbulb text-yellow-500"></i> Studi Kasus</p>
+                    <p class="text-xs md:text-sm mt-2 leading-relaxed">Pernahkah kamu berenang di kolam yang dalam? Semakin dalam kamu menyelam, telingamu terasa makin sakit atau tertekan. Mengapa? Itu karena berat air di atasmu menekan ke segala arah dan bebannya semakin besar saat kamu makin dalam!</p>
+                </div>
+
+                <div class="bg-slate-50 p-5 rounded-xl border border-slate-200 mb-8 text-center">
+                    <p class="text-slate-500 text-sm mb-2 font-medium">Rumus Utama:</p>
+                    <div class="text-2xl md:text-4xl font-bold text-blue-800 font-mono tracking-widest my-2">P = &rho; &times; g &times; h</div>
+                    <p class="text-[11px] md:text-sm text-slate-500 mt-3 leading-relaxed">P = Tekanan (Pa), &rho; = Massa Jenis Cairan (kg/m³), g = Gravitasi (m/s²), h = Kedalaman (m)</p>
+                </div>
+
+                <h3 class="text-lg md:text-xl font-bold text-slate-700 mb-4 flex items-center"><i class="fas fa-flask text-blue-500 mr-2"></i>Simulasi Interaktif</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 border border-slate-100 p-4 md:p-6 rounded-xl bg-slate-50/50">
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Kedalaman (h): <span id="depthValue" class="font-bold text-blue-600 text-lg">5.0</span> m</label>
+                            <input type="range" id="depthSlider" min="0" max="10" step="0.1" value="5" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Jenis Cairan (&rho;):</label>
+                            <select id="fluidSelect" class="w-full border border-gray-300 rounded-lg shadow-sm p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                <option value="1000" data-color="#3b82f6">Air Bersih (1.000 kg/m³)</option>
+                                <option value="1030" data-color="#0369a1">Air Laut (1.030 kg/m³)</option>
+                                <option value="800" data-color="#fbbf24">Minyak (800 kg/m³)</option>
+                            </select>
+                        </div>
+                        <div class="bg-gradient-to-br from-blue-500 to-blue-700 text-white p-5 rounded-xl text-center shadow-md">
+                            <p class="text-xs uppercase tracking-widest opacity-80 mb-1 font-medium">Tekanan Hidrostatis (P)</p>
+                            <div class="text-3xl md:text-4xl font-bold drop-shadow-sm"><span id="pressureResult">50.000</span> <span class="text-lg">Pa</span></div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-center justify-center pt-4 lg:pt-0">
+                        <div class="tank-container shadow-inner">
+                            <div id="liquid" class="liquid"></div>
+                            <div class="ruler">
+                                <div class="ruler-mark">0m</div>
+                                <div class="ruler-mark">5m</div>
+                                <div class="ruler-mark">10m</div>
+                            </div>
+                            <div id="sensor" class="sensor" style="top: 50%;">O</div>
+                        </div>
+                        <p class="text-[10px] md:text-xs text-center text-gray-400 mt-3">* Titik merah mewakili benda/penyelam.</p>
+                    </div>
+                </div>
+
+                <div class="border-t-2 border-slate-100 pt-8 mt-4">
+                    <h3 class="text-lg md:text-xl font-bold text-slate-800 mb-5 flex items-center"><i class="fas fa-edit text-green-500 mr-2"></i>Evaluasi Bab 1</h3>
+                    <div class="space-y-4">
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <p class="font-semibold text-sm md:text-base text-slate-700 mb-4">1. Apa yang terjadi pada tekanan jika penyelam masuk semakin dalam?</p>
+                            <div class="space-y-3 text-sm">
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="hydro_q1" value="A" class="w-4 h-4 text-blue-600"><span class="text-slate-600">A. Tekanan mengecil</span></label>
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="hydro_q1" value="B" class="w-4 h-4 text-blue-600"><span class="text-slate-600">B. Tekanan membesar</span></label>
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="hydro_q1" value="C" class="w-4 h-4 text-blue-600"><span class="text-slate-600">C. Tekanan tetap</span></label>
+                            </div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <p class="font-semibold text-sm md:text-base text-slate-700 mb-4">2. Ikan berada di kedalaman 2 meter dalam kolam air (massa jenis = 1000 kg/m³, g = 10 m/s²). Berapa tekanannya?</p>
+                            <div class="space-y-3 text-sm">
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="hydro_q2" value="A" class="w-4 h-4 text-blue-600"><span class="text-slate-600">A. 2.000 Pa</span></label>
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="hydro_q2" value="B" class="w-4 h-4 text-blue-600"><span class="text-slate-600">B. 20.000 Pa</span></label>
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="hydro_q2" value="C" class="w-4 h-4 text-blue-600"><span class="text-slate-600">C. 10.000 Pa</span></label>
+                            </div>
+                        </div>
+                        <button id="btn-submit-hydro" onclick="submitQuiz('hydro')" class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 md:py-4 rounded-xl font-bold shadow-md transition-all active:scale-95 flex justify-center items-center">
+                            <i class="fas fa-paper-plane mr-2"></i> Kumpulkan Jawaban Bab 1
+                        </button>
+                        <div id="hydro-score-display" class="hidden p-4 bg-green-50 border border-green-200 text-green-800 font-medium rounded-xl mt-2 text-center md:text-left"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="section-pascal" class="content-section bg-white p-5 md:p-8 rounded-2xl shadow-sm border border-slate-100 mb-8 max-w-4xl mx-auto relative hidden-section">
+                <div id="lock-pascal" class="locked-overlay">
+                    <div class="bg-white p-6 rounded-2xl shadow-xl text-center max-w-xs mx-4">
+                        <i class="fas fa-lock text-4xl text-slate-300 mb-4"></i>
+                        <h3 class="text-lg font-bold text-slate-700 mb-2">Materi Terkunci</h3>
+                        <p class="text-sm text-slate-500">Selesaikan Evaluasi Bab 1 terlebih dahulu untuk membuka kunci ini.</p>
+                    </div>
+                </div>
+                
+                <h2 class="text-2xl md:text-3xl font-bold text-purple-700 mb-2 border-b-2 border-purple-50 pb-3">Bab 2: Hukum Pascal</h2>
+                <div class="mb-6 mt-5 p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800 rounded-r-lg">
+                    <p class="font-medium text-sm md:text-base italic leading-relaxed">"Tekanan yang diberikan pada zat cair dalam ruang tertutup akan diteruskan ke segala arah dengan sama besar."</p>
+                </div>
+
+                <div class="bg-slate-50 p-5 rounded-xl border border-slate-200 mb-8 text-center">
+                    <p class="text-slate-500 text-sm mb-2 font-medium">Penerapan: Dongkrak Hidrolik</p>
+                    <div class="text-2xl md:text-4xl font-bold text-purple-800 font-mono tracking-widest my-2">F₁ / A₁ = F₂ / A₂</div>
+                    <p class="text-[11px] md:text-sm text-slate-500 mt-3 leading-relaxed">Dengan gaya dorong (F) yang kecil pada pipa penampang kecil (A₁), kita bisa menghasilkan gaya angkat luar biasa besar di pipa penampang besar (A₂).</p>
+                </div>
+
+                <h3 class="text-lg md:text-xl font-bold text-slate-700 mb-4 flex items-center"><i class="fas fa-car text-purple-500 mr-2"></i>Simulasi Dongkrak Hidrolik</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 border border-slate-100 p-4 md:p-6 rounded-xl bg-slate-50/50">
+                    <div class="space-y-5">
+                        <p class="text-xs md:text-sm text-gray-500 leading-relaxed bg-white p-3 rounded-lg border border-gray-100">Geser slider di bawah untuk memperbesar pipa kedua (A₂) dan perhatikan lonjakan Gaya Angkat (F₂) yang dihasilkan!</p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-white p-3 rounded-lg border border-gray-100 text-center">
+                                <p class="text-xs text-gray-500">Pipa 1 (A₁)</p>
+                                <p class="font-bold text-slate-700">1 m²</p>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg border border-gray-100 text-center">
+                                <p class="text-xs text-gray-500">Gaya 1 (F₁)</p>
+                                <p class="font-bold text-slate-700">10 N</p>
+                            </div>
+                        </div>
+                        <div class="pt-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Luas Pipa Besar (A₂): <span id="area2Value" class="font-bold text-purple-600 text-lg">5</span> m²</label>
+                            <input type="range" id="area2Slider" min="1" max="20" step="1" value="5" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <div class="bg-gradient-to-br from-purple-500 to-purple-700 text-white p-4 rounded-xl text-center shadow-md">
+                            <p class="text-[10px] md:text-xs uppercase tracking-widest opacity-80 mb-1 font-medium">Gaya Angkat (F₂)</p>
+                            <div class="text-3xl md:text-4xl font-bold drop-shadow-sm"><span id="force2Result">50</span> <span class="text-lg">N</span></div>
+                        </div>
+                    </div>
+                    <div class="pascal-system pt-8 lg:pt-0 overflow-x-auto no-scrollbar">
+                        <!-- Pipa 1 -->
+                        <div class="piston-tube flex-shrink-0" style="width: 40px; height: 100px;">
+                            <div class="weight shadow-sm" style="bottom:100%; font-size:10px;">F₁=10N</div>
+                            <div class="piston" style="height: 20px;" id="piston1"></div>
+                        </div>
+                        <!-- Konektor -->
+                        <div class="pipe-connector"></div>
+                        <!-- Pipa 2 -->
+                        <div class="piston-tube flex-shrink-0" id="tube2" style="width: 100px; height: 150px; transition: width 0.3s ease;">
+                            <div class="weight shadow-md" style="bottom:100%; font-size:10px; background:#ef4444;" id="weight2Label">F₂=50N</div>
+                            <div class="piston" style="height: 60px;" id="piston2"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t-2 border-slate-100 pt-8 mt-4">
+                    <h3 class="text-lg md:text-xl font-bold text-slate-800 mb-5 flex items-center"><i class="fas fa-edit text-green-500 mr-2"></i>Evaluasi Bab 2</h3>
+                    <div class="space-y-4">
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <p class="font-semibold text-sm md:text-base text-slate-700 mb-4">1. Menurut Hukum Pascal, untuk mengangkat mobil yang sangat berat di bengkel, kita perlu membuat...</p>
+                            <div class="space-y-3 text-sm">
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="pascal_q1" value="A" class="w-4 h-4 text-purple-600"><span class="text-slate-600">A. Luas penampang pipa pengangkat (A₂) jauh lebih kecil</span></label>
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="pascal_q1" value="B" class="w-4 h-4 text-purple-600"><span class="text-slate-600">B. Luas penampang pipa pengangkat (A₂) jauh lebih besar</span></label>
+                            </div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <p class="font-semibold text-sm md:text-base text-slate-700 mb-4">2. Jika gaya dorong F₁=20 N, pipa kecil A₁=2 m², dan pipa besar A₂=10 m². Berapakah gaya angkat F₂?</p>
+                            <div class="space-y-3 text-sm">
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="pascal_q2" value="A" class="w-4 h-4 text-purple-600"><span class="text-slate-600">A. 40 N</span></label>
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="pascal_q2" value="B" class="w-4 h-4 text-purple-600"><span class="text-slate-600">B. 100 N</span></label>
+                            </div>
+                        </div>
+                        <button id="btn-submit-pascal" onclick="submitQuiz('pascal')" class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 md:py-4 rounded-xl font-bold shadow-md transition-all active:scale-95 flex justify-center items-center">
+                            <i class="fas fa-paper-plane mr-2"></i> Kumpulkan Jawaban Bab 2
+                        </button>
+                        <div id="pascal-score-display" class="hidden p-4 bg-green-50 border border-green-200 text-green-800 font-medium rounded-xl mt-2 text-center md:text-left"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="section-archimedes" class="content-section bg-white p-5 md:p-8 rounded-2xl shadow-sm border border-slate-100 mb-8 max-w-4xl mx-auto relative hidden-section">
+                <div id="lock-archimedes" class="locked-overlay">
+                    <div class="bg-white p-6 rounded-2xl shadow-xl text-center max-w-xs mx-4">
+                        <i class="fas fa-lock text-4xl text-slate-300 mb-4"></i>
+                        <h3 class="text-lg font-bold text-slate-700 mb-2">Materi Terkunci</h3>
+                        <p class="text-sm text-slate-500">Selesaikan Evaluasi Bab 2 terlebih dahulu untuk membuka kunci ini.</p>
+                    </div>
+                </div>
+
+                <h2 class="text-2xl md:text-3xl font-bold text-amber-600 mb-2 border-b-2 border-amber-50 pb-3">Bab 3: Hukum Archimedes</h2>
+                <div class="mb-6 mt-5 p-4 bg-orange-50 border-l-4 border-orange-400 text-orange-800 rounded-r-lg">
+                    <p class="font-medium text-sm md:text-base italic leading-relaxed">"Suatu benda yang dicelupkan ke dalam zat cair akan mengalami gaya ke atas (Gaya Apung) yang besarnya sama dengan berat zat cair yang dipindahkan."</p>
+                </div>
+
+                <h3 class="text-lg md:text-xl font-bold text-slate-700 mb-4 flex items-center"><i class="fas fa-ship text-amber-500 mr-2"></i>Simulasi Apung & Tenggelam</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 border border-slate-100 p-4 md:p-6 rounded-xl bg-slate-50/50">
+                    <div class="space-y-5">
+                        <p class="text-xs md:text-sm text-gray-500 leading-relaxed bg-white p-3 rounded-lg border border-gray-100">Nasib benda di air ditentukan oleh pertarungan Massa Jenisnya! Bandingkan massa jenis benda dengan air (1000 kg/m³).</p>
+                        
+                        <div class="bg-blue-50 border border-blue-100 p-3 rounded-lg flex justify-between items-center">
+                            <span class="text-sm font-medium text-blue-800">Cairan (Air)</span>
+                            <span class="font-bold text-blue-700">1000 kg/m³</span>
+                        </div>
+                        
+                        <div class="pt-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2 flex justify-between">
+                                <span>Massa Jenis Benda:</span>
+                                <span class="font-bold text-amber-600"><span id="densityObjectValue">500</span> kg/m³</span>
+                            </label>
+                            <input type="range" id="densityObjectSlider" min="200" max="2000" step="100" value="500" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        
+                        <div id="archimedesStatus" class="p-4 font-bold text-center rounded-xl bg-green-100 text-green-700 uppercase tracking-widest mt-6 shadow-inner text-lg md:text-xl transition-colors duration-300">
+                            MENGAPUNG
+                        </div>
+                    </div>
+                    <div class="pt-4 pb-2 flex justify-center items-end">
+                        <div class="archimedes-tank shadow-inner">
+                            <div class="archimedes-liquid"></div>
+                            <div id="archObject" class="archimedes-object shadow-md" style="bottom: 60%;">Benda</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t-2 border-slate-100 pt-8 mt-4">
+                    <h3 class="text-lg md:text-xl font-bold text-slate-800 mb-5 flex items-center"><i class="fas fa-edit text-green-500 mr-2"></i>Evaluasi Akhir</h3>
+                    <div class="space-y-4">
+                        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                            <p class="font-semibold text-sm md:text-base text-slate-700 mb-4">1. Besi murni pasti tenggelam di air. Lantas, syarat apa yang membuat kapal pesiar raksasa (terbuat dari besi) tetap bisa mengapung di lautan?</p>
+                            <div class="space-y-3 text-sm">
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="archi_q1" value="A" class="w-4 h-4 text-amber-600"><span class="text-slate-600">A. Lambung kapal dibuat kopong/berongga udara, sehingga rata-rata massa jenis total kapal menjadi lebih kecil dari air laut.</span></label>
+                                <label class="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"><input type="radio" name="archi_q1" value="B" class="w-4 h-4 text-amber-600"><span class="text-slate-600">B. Massa jenis total kapal lebih besar dari laut, tapi ditahan ombak.</span></label>
+                            </div>
+                        </div>
+                        <button id="btn-submit-archimedes" onclick="submitQuiz('archimedes')" class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 md:py-4 rounded-xl font-bold shadow-md transition-all active:scale-95 flex justify-center items-center">
+                            <i class="fas fa-trophy mr-2"></i> Kumpulkan Jawaban Terakhir
+                        </button>
+                        <div id="archimedes-score-display" class="hidden p-4 bg-green-50 border border-green-200 text-green-800 font-medium rounded-xl mt-2 text-center md:text-left"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="section-teacher" class="content-section bg-white p-5 md:p-8 rounded-2xl shadow-sm border border-slate-100 hidden-section max-w-6xl mx-auto">
+                <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4 border-b pb-4">
+                    <h2 class="text-xl md:text-2xl font-bold text-purple-700 flex items-center"><i class="fas fa-chalkboard-teacher mr-3"></i>Dashboard Rekap Nilai</h2>
+                    <button onclick="refreshTeacherData()" class="bg-purple-100 text-purple-700 hover:bg-purple-200 px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center w-full md:w-auto">
+                        <i class="fas fa-sync-alt mr-2"></i>Perbarui Data
+                    </button>
+                </div>
+                
+                <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <p class="text-sm text-gray-500 max-w-xl leading-relaxed">Tabel di bawah ini menampilkan rekam jejak belajar siswa. Data akan diperbarui setiap kali siswa menyelesaikan tahapan kuis.</p>
+                    <div class="flex items-center space-x-3 bg-slate-50 p-2 md:p-3 rounded-xl border border-slate-200 w-full md:w-auto">
+                        <label for="filter-class" class="text-sm font-bold text-slate-700 whitespace-nowrap"><i class="fas fa-filter mr-1"></i> Kelas:</label>
+                        <select id="filter-class" onchange="renderTeacherTable()" class="w-full border-gray-300 rounded-lg shadow-sm p-2 text-sm font-semibold text-blue-700 outline-none">
+                            <option value="all">Semua Kelas</option>
+                            <option value="9A">9A</option>
+                            <option value="9B">9B</option>
+                            <option value="9C">9C</option>
+                            <option value="9D">9D</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead class="bg-purple-50">
+                            <tr>
+                                <th class="py-4 px-4 text-left font-bold text-slate-700 uppercase tracking-wider">Nama Siswa</th>
+                                <th class="py-4 px-4 text-center font-bold text-slate-700 uppercase tracking-wider cursor-pointer hover:bg-purple-100 transition-colors" onclick="sortTableByClass()" title="Klik untuk urutkan kelas">Kelas <i class="fas fa-sort ml-1 text-slate-400"></i></th>
+                                <th class="py-4 px-4 text-center font-bold text-slate-700 uppercase tracking-wider">Status Belajar</th>
+                                <th class="py-4 px-4 text-center font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Bab 1<br><span class="text-[10px] font-normal text-slate-500">Hidro</span></th>
+                                <th class="py-4 px-4 text-center font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Bab 2<br><span class="text-[10px] font-normal text-slate-500">Pascal</span></th>
+                                <th class="py-4 px-4 text-center font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Bab 3<br><span class="text-[10px] font-normal text-slate-500">Archimedes</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="student-table-body" class="divide-y divide-gray-100 bg-white">
+                            <!-- Data disuntikkan via JS -->
+                            <tr><td colspan="6" class="text-center py-8 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i> Memuat data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <div id="custom-modal" class="modal-bg hidden">
+        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center relative transform transition-all scale-100">
+            <div id="modal-icon" class="text-5xl mb-4"></div>
+            <h3 id="modal-title" class="text-xl md:text-2xl font-bold mb-2 text-slate-800"></h3>
+            <p id="modal-desc" class="text-sm md:text-base text-gray-600 mb-6 leading-relaxed"></p>
+            <button onclick="closeModal()" class="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold w-full hover:bg-blue-700 transition-colors shadow-md active:scale-95">Tutup & Lanjutkan</button>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        let currentUserData = null; 
+        let allStudentsData = []; 
+        let sortClassAsc = true; 
+        
+        // UI Elements
+        const authScreen = document.getElementById('auth-screen');
+        const mainApp = document.getElementById('main-app');
+        const navMenu = document.getElementById('nav-menu');
+        const studentProgressWidget = document.getElementById('student-progress-widget');
+        
+        const sectionHydro = document.getElementById('section-hydro');
+        const sectionPascal = document.getElementById('section-pascal');
+        const sectionArchimedes = document.getElementById('section-archimedes');
+        const sectionTeacher = document.getElementById('section-teacher');
+
+        // API Vercel menyimpan kredensial Google Sheets di server, bukan browser.
+        function saveStudent(payload) {
+            const apiBaseUrl = window.APP_CONFIG?.apiBaseUrl || '';
+            return fetch(`${apiBaseUrl}/api/student`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(async (response) => {
+                const result = await response.json().catch(() => null);
+                if (!response.ok || !result) throw new Error(result?.message || 'Server tidak dapat dihubungi.');
+                return result;
+            });
+        }
+
+        // --- Modals ---
+        window.showModal = function(icon, title, desc, iconColor = 'text-blue-500') {
+            document.getElementById('modal-icon').className = `text-5xl mb-4 ${iconColor} ${icon}`;
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-desc').textContent = desc;
+            document.getElementById('custom-modal').classList.remove('hidden');
+        }
+        window.closeModal = function() {
+            document.getElementById('custom-modal').classList.add('hidden');
+        }
+
+        // --- Cek Sesi Tersimpan (Auto-Login saat Refresh) ---
+        window.addEventListener('DOMContentLoaded', async () => {
+            const savedSession = localStorage.getItem('fisikaAppSession');
+            if (savedSession) {
+                currentUserData = JSON.parse(savedSession);
+                
+                // Sesi lama dari versi sebelumnya (yang punya dashboard guru)
+                // tidak boleh membuka rekap data di halaman publik.
+                if (currentUserData.role !== 'student') {
+                    localStorage.removeItem('fisikaAppSession');
+                    currentUserData = null;
+                    return;
+                }
+                document.getElementById('nav-user-name').textContent = currentUserData.name;
+                authScreen.classList.add('hidden');
+                mainApp.classList.remove('hidden-section');
+                
+                if (currentUserData.role === 'student') {
+                    setupStudentDashboard();
+                } else {
+                    await fetchTeacherData();
+                    setupTeacherDashboard();
+                }
+            }
+        });
+
+        // --- Authentication & Database Requests ---
+        window.loginAsStudent = async function() {
+            const emailInput = document.getElementById('studentEmail').value.trim();
+            const nameInput = document.getElementById('studentName').value.trim();
+            const classInput = document.getElementById('studentClass').value;
+            
+            if(!emailInput) {
+                showModal('fas fa-envelope', 'Email Wajib Diisi', 'Harap masukkan Email untuk menyimpan riwayat belajarmu.', 'text-yellow-500');
+                return;
+            }
+            
+            await authenticateAndSetupUser('student', nameInput, classInput, emailInput);
+        };
+
+        async function authenticateAndSetupUser(role, name, studentClass = null, email = null) {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('loading-auth').classList.remove('hidden');
+
+            try {
+                if (role === 'student') {
+                    const uid = email.toLowerCase();
+                    const payload = {
+                        action: 'save',
+                        uid: uid,
+                        name: name || "Siswa Tanpa Nama", 
+                        className: studentClass,
+                        status: 'Sedang Belajar (Bab 1)'
+                    };
+
+                    const result = await saveStudent(payload);
+                    
+                    if(result.success) {
+                        currentUserData = { ...result.data, role: role };
+                        localStorage.setItem('fisikaAppSession', JSON.stringify(currentUserData));
+                        setupStudentDashboard();
+                    }
+                } else {
+                    currentUserData = { role: role, name: name };
+                    localStorage.setItem('fisikaAppSession', JSON.stringify(currentUserData));
+                    await fetchTeacherData();
+                    setupTeacherDashboard();
+                }
+
+                document.getElementById('nav-user-name').textContent = currentUserData.name;
+                authScreen.classList.add('hidden');
+                mainApp.classList.remove('hidden-section'); // FIX: Use hidden-section
+
+            } catch (err) {
+                console.error(err);
+                showModal('fas fa-wifi', 'Koneksi Gagal', 'Gagal terhubung ke database. Periksa koneksi, deployment Vercel, dan konfigurasi API.', 'text-red-500');
+                document.getElementById('login-form').classList.remove('hidden');
+                document.getElementById('loading-auth').classList.add('hidden');
+            }
+        }
+
+        window.logout = function() {
+            // 1. Hapus sesi di penyimpanan lokal
+            localStorage.removeItem('fisikaAppSession');
+            currentUserData = null;
+            
+            // 2. Sembunyikan aplikasi utama dan tampilkan layar login
+            document.getElementById('main-app').classList.add('hidden-section');
+            document.getElementById('auth-screen').classList.remove('hidden');
+            
+            // 3. Kembalikan form login ke tampilan semula (sembunyikan animasi loading)
+            document.getElementById('loading-auth').classList.add('hidden');
+            document.getElementById('login-form').classList.remove('hidden');
+            
+            // 4. Kosongkan isian form agar siap dipakai kembali
+            document.getElementById('studentEmail').value = '';
+            document.getElementById('studentName').value = '';
+            
+            // Posisikan scroll ke paling atas
+            window.scrollTo(0, 0);
+        };
+
+        // --- UI Navigation Management ---
+        window.switchTab = function(tabId) {
+            sectionHydro.classList.add('hidden-section');
+            sectionPascal.classList.add('hidden-section');
+            sectionArchimedes.classList.add('hidden-section');
+            sectionTeacher.classList.add('hidden-section');
+            
+            document.getElementById(`section-${tabId}`).classList.remove('hidden-section');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-100', 'text-blue-800', 'border-blue-600', 'md:border-r-4', 'border-b-4', 'md:border-b-0');
+                btn.classList.add('text-slate-500', 'bg-white', 'border-transparent');
+            });
+            const activeBtn = document.getElementById(`nav-${tabId}`);
+            if(activeBtn) {
+                activeBtn.classList.remove('text-slate-500', 'bg-white', 'border-transparent');
+                activeBtn.classList.add('bg-blue-100', 'text-blue-800', 'border-blue-600', 'md:border-r-4', 'border-b-4', 'md:border-b-0');
+            }
+        };
+
+        function setupStudentDashboard() {
+            sectionTeacher.classList.add('hidden-section');
+            document.getElementById('student-progress-widget').classList.remove('hidden');
+            renderStudentMenu();
+            switchTab('hydro');
+        }
+
+        function renderStudentMenu() {
+            const scores = currentUserData.scores || {};
+            const hydroDone = scores.hydro !== null && scores.hydro !== undefined;
+            const pascalDone = scores.pascal !== null && scores.pascal !== undefined;
+            const archiDone = scores.archimedes !== null && scores.archimedes !== undefined;
+
+            // Updated for responsive horizontal layout on mobile
+            navMenu.innerHTML = `
+                <button id="nav-hydro" onclick="switchTab('hydro')" class="nav-btn whitespace-nowrap md:whitespace-normal md:w-full text-left px-4 py-2 md:p-3 rounded-lg flex md:justify-between items-center bg-blue-100 text-blue-800 font-bold border-b-4 md:border-b-0 md:border-r-4 border-blue-600 transition-colors">
+                    <span class="mr-2 md:mr-0 text-sm md:text-base">1. Hidrostatis</span> ${hydroDone ? '<i class="fas fa-check-circle text-green-500"></i>' : ''}
+                </button>
+                <button id="nav-pascal" ${hydroDone ? 'onclick="switchTab(\'pascal\')"' : ''} class="nav-btn whitespace-nowrap md:whitespace-normal md:w-full text-left px-4 py-2 md:p-3 rounded-lg flex md:justify-between items-center text-slate-500 hover:bg-slate-50 border-b-4 md:border-b-0 md:border-r-4 border-transparent transition-colors ${!hydroDone ? 'opacity-60 cursor-not-allowed' : ''}">
+                    <span class="mr-2 md:mr-0 text-sm md:text-base">2. Pascal</span> ${pascalDone ? '<i class="fas fa-check-circle text-green-500"></i>' : (!hydroDone ? '<i class="fas fa-lock text-slate-300"></i>' : '')}
+                </button>
+                <button id="nav-archimedes" ${pascalDone ? 'onclick="switchTab(\'archimedes\')"' : ''} class="nav-btn whitespace-nowrap md:whitespace-normal md:w-full text-left px-4 py-2 md:p-3 rounded-lg flex md:justify-between items-center text-slate-500 hover:bg-slate-50 border-b-4 md:border-b-0 md:border-r-4 border-transparent transition-colors ${!pascalDone ? 'opacity-60 cursor-not-allowed' : ''}">
+                    <span class="mr-2 md:mr-0 text-sm md:text-base">3. Archimedes</span> ${archiDone ? '<i class="fas fa-check-circle text-green-500"></i>' : (!pascalDone ? '<i class="fas fa-lock text-slate-300"></i>' : '')}
+                </button>
+            `;
+
+            if(hydroDone) {
+                document.getElementById('lock-pascal').style.display = 'none';
+                disableQuiz('hydro', scores.hydro);
+            }
+            if(pascalDone) {
+                document.getElementById('lock-archimedes').style.display = 'none';
+                disableQuiz('pascal', scores.pascal);
+            }
+            if(archiDone) {
+                disableQuiz('archimedes', scores.archimedes);
+            }
+
+            let completed = 0;
+            if(hydroDone) completed++;
+            if(pascalDone) completed++;
+            if(archiDone) completed++;
+            const progressPct = Math.round((completed / 3) * 100);
+            document.getElementById('progress-bar-fill').style.width = `${progressPct}%`;
+            document.getElementById('progress-text').textContent = `${progressPct}% Selesai`;
+        }
+
+        // Rekap guru sengaja tidak diambil melalui halaman publik. Akses dari
+        // Google Sheets oleh akun guru menjaga data siswa tidak bocor.
+        async function fetchTeacherData() { allStudentsData = []; }
+
+        function setupTeacherDashboard() {
+            document.getElementById('student-progress-widget').classList.add('hidden');
+            
+            navMenu.innerHTML = `
+                <button id="nav-teacher" onclick="switchTab('teacher')" class="nav-btn w-full text-left p-3 rounded-lg flex justify-between items-center bg-blue-100 text-blue-800 font-bold border-r-4 border-blue-600 mb-1">
+                    <span><i class="fas fa-table mr-2"></i>Rekap Nilai</span>
+                </button>
+            `;
+            
+            renderTeacherTable();
+            switchTab('teacher');
+        }
+
+        window.refreshTeacherData = async function() {
+            document.getElementById('student-table-body').innerHTML = `<tr><td colspan="6" class="text-center py-8 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i> Menyinkronkan data...</td></tr>`;
+            await fetchTeacherData();
+            renderTeacherTable();
+        }
+
+        window.renderTeacherTable = function() {
+            const tbody = document.getElementById('student-table-body');
+            tbody.innerHTML = '';
+            
+            if(allStudentsData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-gray-500 bg-slate-50">Belum ada data siswa di database.</td></tr>`;
+                return;
+            }
+
+            const filterClass = document.getElementById('filter-class').value;
+            let filteredData = allStudentsData;
+            if (filterClass !== 'all') {
+                filteredData = allStudentsData.filter(student => student.className === filterClass);
+            }
+            
+            if (filteredData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-gray-500 bg-slate-50">Tidak ada data untuk kelas ${filterClass}.</td></tr>`;
+                return;
+            }
+
+            filteredData.forEach(data => {
+                const s = data.scores || {};
+                const className = data.className || '-'; 
+                const formatScore = (score) => (score !== null && score !== undefined && score !== "") ? `<span class="font-bold px-2 py-1 rounded-md ${score>70?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}">${score}</span>` : '<span class="text-gray-300">-</span>';
+                
+                const row = `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="py-4 px-4 border-b border-slate-100 font-medium text-slate-800">${data.name}</td>
+                        <td class="py-4 px-4 border-b border-slate-100 text-center text-sm font-bold text-blue-600">${className}</td>
+                        <td class="py-4 px-4 border-b border-slate-100 text-center text-xs text-slate-500"><span class="bg-slate-100 px-2 py-1 rounded-full">${data.status}</span></td>
+                        <td class="py-4 px-4 border-b border-slate-100 text-center">${formatScore(s.hydro)}</td>
+                        <td class="py-4 px-4 border-b border-slate-100 text-center">${formatScore(s.pascal)}</td>
+                        <td class="py-4 px-4 border-b border-slate-100 text-center">${formatScore(s.archimedes)}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        window.sortTableByClass = function() {
+            sortClassAsc = !sortClassAsc;
+            allStudentsData.sort((a, b) => {
+                const classA = a.className || '';
+                const classB = b.className || '';
+                if (classA < classB) return sortClassAsc ? -1 : 1;
+                if (classA > classB) return sortClassAsc ? 1 : -1;
+                return 0;
+            });
+            renderTeacherTable();
+        }
+
+        window.submitQuiz = async function(section) {
+            let score = 0;
+            let newStatus = '';
+            
+            if(section === 'hydro') {
+                const q1 = document.querySelector('input[name="hydro_q1"]:checked')?.value;
+                const q2 = document.querySelector('input[name="hydro_q2"]:checked')?.value;
+                if(!q1 || !q2) { showModal('fas fa-exclamation-triangle', 'Belum Lengkap', 'Pilih jawaban untuk semua soal Bab 1.', 'text-yellow-500'); return; }
+                
+                if(q1 === 'B') score += 50;
+                if(q2 === 'B') score += 50;
+                newStatus = 'Selesai Bab 1, Lanjut Bab 2';
+
+            } else if (section === 'pascal') {
+                const q1 = document.querySelector('input[name="pascal_q1"]:checked')?.value;
+                const q2 = document.querySelector('input[name="pascal_q2"]:checked')?.value;
+                if(!q1 || !q2) { showModal('fas fa-exclamation-triangle', 'Belum Lengkap', 'Pilih jawaban untuk semua soal Bab 2.', 'text-yellow-500'); return; }
+                
+                if(q1 === 'B') score += 50;
+                if(q2 === 'B') score += 50;
+                newStatus = 'Selesai Bab 2, Lanjut Bab 3';
+            
+            } else if (section === 'archimedes') {
+                const q1 = document.querySelector('input[name="archi_q1"]:checked')?.value;
+                if(!q1) { showModal('fas fa-exclamation-triangle', 'Belum Lengkap', 'Pilih jawaban untuk soal Bab 3.', 'text-yellow-500'); return; }
+                
+                if(q1 === 'A') score += 100;
+                newStatus = 'Telah Menyelesaikan Semua Materi';
+            }
+
+            // Save to Google Sheets
+            if(currentUserData && currentUserData.role === 'student') {
+                const btn = document.getElementById(`btn-submit-${section}`);
+                const originalText = btn.innerHTML;
+                btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Mengirim data...`;
+                btn.disabled = true;
+
+                try {
+                    currentUserData.status = newStatus;
+                    currentUserData.scores[section] = score;
+
+                    // Update Local Storage
+                    localStorage.setItem('fisikaAppSession', JSON.stringify(currentUserData));
+
+                    const payload = {
+                        action: 'save',
+                        uid: currentUserData.uid,
+                        status: newStatus,
+                        scores: {}
+                    };
+                    payload.scores[section] = score;
+                    
+                    const result = await saveStudent(payload);
+                    
+                    if(result.success) {
+                        renderStudentMenu(); 
+                        
+                        let msg = `Kamu mendapat nilai ${score}.`;
+                        if(score === 100) msg += " Luar biasa, semua benar!";
+                        else if(score > 0) msg += " Masih ada yang salah, tingkatkan lagi!";
+                        else msg += " Tetap semangat, pelajari materinya lagi ya!";
+                        
+                        showModal('fas fa-star', 'Kuis Disimpan!', msg, score>50?'text-green-500':'text-yellow-500');
+                    }
+                    
+                } catch(e) {
+                    console.error(e);
+                    showModal('fas fa-times-circle', 'Gagal Menyimpan', 'Terjadi kesalahan jaringan. Cek koneksi internetmu.', 'text-red-500');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            }
+        };
+
+        function disableQuiz(section, score) {
+            const btn = document.getElementById(`btn-submit-${section}`);
+            const disp = document.getElementById(`${section}-score-display`);
+            if(btn && disp) {
+                btn.style.display = 'none';
+                disp.classList.remove('hidden');
+                disp.innerHTML = `<div class="flex items-center"><i class="fas fa-check-circle text-xl mr-3"></i> <div>Kuis telah diselesaikan.<br>Nilaimu: <strong class="text-lg">${score}</strong></div></div>`;
+                
+                document.querySelectorAll(`input[name^="${section.substring(0,4)}"]`).forEach(el => el.disabled = true);
+            }
+        }
+
+        // 1. Hydrostatic
+        const depthSlider = document.getElementById('depthSlider');
+        const depthValueDisplay = document.getElementById('depthValue');
+        const fluidSelect = document.getElementById('fluidSelect');
+        const pressureResult = document.getElementById('pressureResult');
+        const sensor = document.getElementById('sensor');
+        const liquid = document.getElementById('liquid');
+
+        function updateHydro() {
+            const h = parseFloat(depthSlider.value);
+            const rho = parseFloat(fluidSelect.value);
+            const P = rho * 10 * h; 
+            
+            depthValueDisplay.textContent = h.toFixed(1);
+            pressureResult.textContent = new Intl.NumberFormat('id-ID').format(P);
+            
+            liquid.style.backgroundColor = fluidSelect.options[fluidSelect.selectedIndex].getAttribute('data-color');
+            const topPct = (h / 10) * 100;
+            sensor.style.top = `calc(${Math.min(topPct, 95)}% - 20px)`;
+        }
+        depthSlider.addEventListener('input', updateHydro);
+        fluidSelect.addEventListener('change', updateHydro);
+        updateHydro();
+
+        // 2. Pascal
+        const area2Slider = document.getElementById('area2Slider');
+        const area2Value = document.getElementById('area2Value');
+        const force2Result = document.getElementById('force2Result');
+        const tube2 = document.getElementById('tube2');
+        const weight2Label = document.getElementById('weight2Label');
+        const piston2 = document.getElementById('piston2');
+
+        function updatePascal() {
+            const A2 = parseInt(area2Slider.value);
+            const F1 = 10, A1 = 1;
+            const F2 = (F1 / A1) * A2;
+            
+            area2Value.textContent = A2;
+            force2Result.textContent = F2;
+            weight2Label.textContent = `F₂=${F2}N`;
+            
+            const baseWidth = 40; 
+            // Calculate dynamic width, ensuring it doesn't break small screens visually
+            const newWidth = Math.min(baseWidth + (A2 * 4), 160); 
+            tube2.style.width = `${newWidth}px`; 
+            piston2.style.height = `${40 + (A2 * 2.5)}px`; 
+        }
+        area2Slider.addEventListener('input', updatePascal);
+        updatePascal();
+
+        // 3. Archimedes
+        const densityObjectSlider = document.getElementById('densityObjectSlider');
+        const densityObjectValue = document.getElementById('densityObjectValue');
+        const archStatus = document.getElementById('archimedesStatus');
+        const archObject = document.getElementById('archObject');
+
+        function updateArchimedes() {
+            const rhoBenda = parseInt(densityObjectSlider.value);
+            const rhoCairan = 1000;
+            densityObjectValue.textContent = rhoBenda;
+            
+            if (rhoBenda < rhoCairan) {
+                archStatus.textContent = "MENGAPUNG";
+                archStatus.className = "p-4 font-bold text-center rounded-xl bg-green-100 text-green-700 uppercase tracking-widest mt-6 shadow-inner text-lg md:text-xl transition-colors duration-300";
+                archObject.style.bottom = "60%"; 
+            } else if (rhoBenda === rhoCairan) {
+                archStatus.textContent = "MELAYANG";
+                archStatus.className = "p-4 font-bold text-center rounded-xl bg-yellow-100 text-yellow-700 uppercase tracking-widest mt-6 shadow-inner text-lg md:text-xl transition-colors duration-300";
+                archObject.style.bottom = "25%"; 
+            } else {
+                archStatus.textContent = "TENGGELAM";
+                archStatus.className = "p-4 font-bold text-center rounded-xl bg-red-100 text-red-700 uppercase tracking-widest mt-6 shadow-inner text-lg md:text-xl transition-colors duration-300";
+                archObject.style.bottom = "0%"; 
+            }
+        }
+        densityObjectSlider.addEventListener('input', updateArchimedes);
+        updateArchimedes();
+
+    </script>
+</body>
+</html>

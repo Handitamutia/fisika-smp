@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/student.js": {
+      "maxDuration": 10
+    }
+  }
+}
