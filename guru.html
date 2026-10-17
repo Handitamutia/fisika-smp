@@ -15,10 +15,15 @@
       <div class="text-center mb-6">
         <i class="fas fa-chalkboard-teacher text-4xl text-purple-600 mb-3"></i>
         <h1 class="text-2xl font-bold">Akses Guru</h1>
-        <p class="text-sm text-slate-500 mt-2">Masukkan kode guru untuk melihat rekap nilai.</p>
+        <p class="text-sm text-slate-500 mt-2">Masukkan kombinasi sandi dan password guru.</p>
       </div>
-      <label for="teacher-password" class="block text-sm font-semibold mb-2">Kode Guru</label>
-      <input id="teacher-password" type="password" autocomplete="current-password" class="w-full min-h-[44px] rounded-lg border-2 border-slate-300 px-3 focus:outline-none focus:border-purple-500" placeholder="Masukkan kode guru">
+      <label for="teacher-username" class="block text-sm font-semibold mb-2">Sandi</label>
+      <input id="teacher-username" type="text" autocomplete="username" class="w-full min-h-[44px] rounded-lg border-2 border-slate-300 px-3 focus:outline-none focus:border-purple-500" placeholder="Masukkan sandi">
+      <label for="teacher-password" class="block text-sm font-semibold mt-4 mb-2">Password</label>
+      <div class="relative">
+        <input id="teacher-password" type="password" autocomplete="current-password" class="w-full min-h-[44px] rounded-lg border-2 border-slate-300 py-2 pl-3 pr-12 focus:outline-none focus:border-purple-500" placeholder="Masukkan password">
+        <button id="toggle-password" type="button" class="absolute right-0 top-0 min-h-[44px] w-12 text-slate-500 hover:text-purple-700" aria-label="Tampilkan password" title="Tampilkan password"><i class="fas fa-eye"></i></button>
+      </div>
       <p id="login-error" class="hidden text-sm text-red-600 mt-3" role="alert"></p>
       <button id="login-button" class="mt-5 w-full min-h-[44px] rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold transition-colors">Buka Rekap Nilai</button>
     </section>
@@ -46,6 +51,7 @@
   </main>
 
   <script>
+    let teacherUsername = '';
     let teacherPassword = '';
     let students = [];
     const errorBox = document.getElementById('login-error');
@@ -77,7 +83,7 @@
     }
 
     async function loadStudents() {
-      const response = await fetch('/api/teacher', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: teacherPassword }) });
+      const response = await fetch('/api/teacher', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: teacherUsername, password: teacherPassword }) });
       const result = await response.json().catch(() => null);
       if (!response.ok || !result?.success) throw new Error(result?.message || 'Rekap nilai tidak dapat dimuat.');
       students = result.data;
@@ -85,6 +91,7 @@
     }
 
     async function login() {
+      teacherUsername = document.getElementById('teacher-username').value.trim();
       teacherPassword = document.getElementById('teacher-password').value;
       errorBox.classList.add('hidden');
       loginButton.disabled = true;
@@ -103,6 +110,15 @@
     }
     loginButton.addEventListener('click', login);
     document.getElementById('teacher-password').addEventListener('keydown', (event) => { if (event.key === 'Enter') login(); });
+    document.getElementById('toggle-password').addEventListener('click', () => {
+      const input = document.getElementById('teacher-password');
+      const button = document.getElementById('toggle-password');
+      const visible = input.type === 'text';
+      input.type = visible ? 'password' : 'text';
+      button.setAttribute('aria-label', visible ? 'Tampilkan password' : 'Sembunyikan password');
+      button.setAttribute('title', visible ? 'Tampilkan password' : 'Sembunyikan password');
+      button.innerHTML = `<i class="fas ${visible ? 'fa-eye' : 'fa-eye-slash'}"></i>`;
+    });
     document.getElementById('class-filter').addEventListener('change', render);
     document.getElementById('refresh-button').addEventListener('click', async () => {
       const button = document.getElementById('refresh-button'); button.disabled = true;

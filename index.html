@@ -450,6 +450,26 @@
             });
         }
 
+        // Status progres selalu dihitung dari nilai kuis yang benar-benar tersimpan.
+        // Nilai 0 tetap dianggap sudah mengerjakan kuis.
+        function getLearningStatus(scores = {}) {
+            const hasScore = (value) => value !== undefined && value !== null && value !== '';
+            const hydroDone = hasScore(scores.hydro);
+            const pascalDone = hasScore(scores.pascal);
+            const archimedesDone = hasScore(scores.archimedes);
+
+            if (hydroDone && pascalDone && archimedesDone) {
+                return 'Telah Menyelesaikan Semua Materi';
+            }
+            if (hydroDone && pascalDone) {
+                return 'Selesai Bab 2, Lanjut Bab 3';
+            }
+            if (hydroDone) {
+                return 'Selesai Bab 1, Lanjut Bab 2';
+            }
+            return 'Sedang Belajar (Bab 1)';
+        }
+
         // --- Modals ---
         window.showModal = function(icon, title, desc, iconColor = 'text-blue-500') {
             document.getElementById('modal-icon').className = `text-5xl mb-4 ${iconColor} ${icon}`;
@@ -467,6 +487,10 @@
             if (savedSession) {
                 currentUserData = JSON.parse(savedSession);
                 
+                // Perbaiki status tampilan berdasarkan skor yang tersimpan di sesi.
+                currentUserData.scores = currentUserData.scores || {};
+                currentUserData.status = getLearningStatus(currentUserData.scores);
+
                 // Sesi lama dari versi sebelumnya (yang punya dashboard guru)
                 // tidak boleh membuka rekap data di halaman publik.
                 if (currentUserData.role !== 'student') {
@@ -477,13 +501,17 @@
                 document.getElementById('nav-user-name').textContent = currentUserData.name;
                 authScreen.classList.add('hidden');
                 mainApp.classList.remove('hidden-section');
-                
-                if (currentUserData.role === 'student') {
-                    setupStudentDashboard();
-                } else {
-                    await fetchTeacherData();
-                    setupTeacherDashboard();
+                try {
+                    // localStorage hanya cache; progres sebenarnya selalu dari Sheet.
+                    const fresh = await saveStudent({ action: 'save', uid: currentUserData.uid });
+                    if (fresh.success) {
+                        currentUserData = { ...fresh.data, role: 'student' };
+                        localStorage.setItem('fisikaAppSession', JSON.stringify(currentUserData));
+                    }
+                } catch (error) {
+                    console.warn('Sinkronisasi sesi gagal, memakai data lokal.', error);
                 }
+                setupStudentDashboard();
             }
         });
 
@@ -508,21 +536,30 @@
             try {
                 if (role === 'student') {
                     const uid = email.toLowerCase();
+                    // Jangan kirim status awal saat login: itu dapat menimpa progres siswa lama.
+                    // Backend harus membuat siswa baru hanya jika UID belum ada, dan
+                    // mengembalikan data lama jika UID sudah terdaftar.
                     const payload = {
                         action: 'save',
                         uid: uid,
-                        name: name || "Siswa Tanpa Nama", 
-                        className: studentClass,
-                        status: 'Sedang Belajar (Bab 1)'
+                        name: name || 'Siswa Tanpa Nama',
+                        className: studentClass
                     };
 
                     const result = await saveStudent(payload);
-                    
-                    if(result.success) {
-                        currentUserData = { ...result.data, role: role };
-                        localStorage.setItem('fisikaAppSession', JSON.stringify(currentUserData));
-                        setupStudentDashboard();
+                    if (!result?.success || !result.data) {
+                        throw new Error(result?.message || 'Server tidak mengembalikan data siswa.');
                     }
+
+                    const savedScores = result.data.scores || {};
+                    currentUserData = {
+                        ...result.data,
+                        scores: savedScores,
+                        status: getLearningStatus(savedScores),
+                        role: 'student'
+                    };
+                    localStorage.setItem('fisikaAppSession', JSON.stringify(currentUserData));
+                    setupStudentDashboard();
                 } else {
                     currentUserData = { role: role, name: name };
                     localStorage.setItem('fisikaAppSession', JSON.stringify(currentUserData));
@@ -592,9 +629,10 @@
 
         function renderStudentMenu() {
             const scores = currentUserData.scores || {};
-            const hydroDone = scores.hydro !== null && scores.hydro !== undefined;
-            const pascalDone = scores.pascal !== null && scores.pascal !== undefined;
-            const archiDone = scores.archimedes !== null && scores.archimedes !== undefined;
+            const hasScore = (value) => value !== null && value !== undefined && value !== '';
+            const hydroDone = hasScore(scores.hydro);
+            const pascalDone = hasScore(scores.pascal);
+            const archiDone = hasScore(scores.archimedes);
 
             // Updated for responsive horizontal layout on mobile
             navMenu.innerHTML = `
@@ -705,73 +743,93 @@
         }
 
         window.submitQuiz = async function(section) {
+            if (!currentUserData || currentUserData.role !== 'student') {
+                showModal('fas fa-exclamation-triangle', 'Sesi Tidak Valid', 'Silakan masuk sebagai siswa terlebih dahulu.', 'text-yellow-500');
+                return;
+            }
+
             let score = 0;
-            let newStatus = '';
-            
-            if(section === 'hydro') {
+
+            if (section === 'hydro') {
                 const q1 = document.querySelector('input[name="hydro_q1"]:checked')?.value;
                 const q2 = document.querySelector('input[name="hydro_q2"]:checked')?.value;
-                if(!q1 || !q2) { showModal('fas fa-exclamation-triangle', 'Belum Lengkap', 'Pilih jawaban untuk semua soal Bab 1.', 'text-yellow-500'); return; }
-                
-                if(q1 === 'B') score += 50;
-                if(q2 === 'B') score += 50;
-                newStatus = 'Selesai Bab 1, Lanjut Bab 2';
-
+                if (!q1 || !q2) {
+                    showModal('fas fa-exclamation-triangle', 'Belum Lengkap', 'Pilih jawaban untuk semua soal Bab 1.', 'text-yellow-500');
+                    return;
+                }
+                if (q1 === 'B') score += 50;
+                if (q2 === 'B') score += 50;
             } else if (section === 'pascal') {
                 const q1 = document.querySelector('input[name="pascal_q1"]:checked')?.value;
                 const q2 = document.querySelector('input[name="pascal_q2"]:checked')?.value;
-                if(!q1 || !q2) { showModal('fas fa-exclamation-triangle', 'Belum Lengkap', 'Pilih jawaban untuk semua soal Bab 2.', 'text-yellow-500'); return; }
-                
-                if(q1 === 'B') score += 50;
-                if(q2 === 'B') score += 50;
-                newStatus = 'Selesai Bab 2, Lanjut Bab 3';
-            
+                if (!q1 || !q2) {
+                    showModal('fas fa-exclamation-triangle', 'Belum Lengkap', 'Pilih jawaban untuk semua soal Bab 2.', 'text-yellow-500');
+                    return;
+                }
+                if (q1 === 'B') score += 50;
+                if (q2 === 'B') score += 50;
             } else if (section === 'archimedes') {
                 const q1 = document.querySelector('input[name="archi_q1"]:checked')?.value;
-                if(!q1) { showModal('fas fa-exclamation-triangle', 'Belum Lengkap', 'Pilih jawaban untuk soal Bab 3.', 'text-yellow-500'); return; }
-                
-                if(q1 === 'A') score += 100;
-                newStatus = 'Telah Menyelesaikan Semua Materi';
+                if (!q1) {
+                    showModal('fas fa-exclamation-triangle', 'Belum Lengkap', 'Pilih jawaban untuk soal Bab 3.', 'text-yellow-500');
+                    return;
+                }
+                if (q1 === 'A') score += 100;
+            } else {
+                showModal('fas fa-exclamation-triangle', 'Bab Tidak Dikenal', 'Bagian kuis tidak valid.', 'text-red-500');
+                return;
             }
 
-            // Save to Google Sheets
-            if(currentUserData && currentUserData.role === 'student') {
-                const btn = document.getElementById(`btn-submit-${section}`);
-                const originalText = btn.innerHTML;
-                btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Mengirim data...`;
+            const btn = document.getElementById(`btn-submit-${section}`);
+            const originalText = btn ? btn.innerHTML : '';
+            if (btn) {
                 btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Mengirim data...';
+            }
 
-                try {
-                    currentUserData.status = newStatus;
-                    currentUserData.scores[section] = score;
+            try {
+                // Gabungkan nilai baru dengan nilai bab lain yang sudah ada.
+                const mergedScores = {
+                    ...(currentUserData.scores || {}),
+                    [section]: score
+                };
+                const calculatedStatus = getLearningStatus(mergedScores);
 
-                    // Update Local Storage
-                    localStorage.setItem('fisikaAppSession', JSON.stringify(currentUserData));
+                // Kirim seluruh skor supaya backend dapat menyimpan data secara konsisten.
+                const result = await saveStudent({
+                    action: 'save',
+                    uid: currentUserData.uid,
+                    scores: mergedScores,
+                    status: calculatedStatus
+                });
 
-                    const payload = {
-                        action: 'save',
-                        uid: currentUserData.uid,
-                        status: newStatus,
-                        scores: {}
-                    };
-                    payload.scores[section] = score;
-                    
-                    const result = await saveStudent(payload);
-                    
-                    if(result.success) {
-                        renderStudentMenu(); 
-                        
-                        let msg = `Kamu mendapat nilai ${score}.`;
-                        if(score === 100) msg += " Luar biasa, semua benar!";
-                        else if(score > 0) msg += " Masih ada yang salah, tingkatkan lagi!";
-                        else msg += " Tetap semangat, pelajari materinya lagi ya!";
-                        
-                        showModal('fas fa-star', 'Kuis Disimpan!', msg, score>50?'text-green-500':'text-yellow-500');
-                    }
-                    
-                } catch(e) {
-                    console.error(e);
-                    showModal('fas fa-times-circle', 'Gagal Menyimpan', e?.message || 'Terjadi kesalahan jaringan. Cek koneksi internetmu.', 'text-red-500');
+                if (!result?.success) {
+                    throw new Error(result?.message || 'Server gagal menyimpan hasil kuis.');
+                }
+
+                // Utamakan data hasil baca/simpan dari server, bukan cache lokal.
+                const serverData = result.data || {};
+                const confirmedScores = serverData.scores || mergedScores;
+                currentUserData = {
+                    ...currentUserData,
+                    ...serverData,
+                    scores: confirmedScores,
+                    status: getLearningStatus(confirmedScores),
+                    role: 'student'
+                };
+                localStorage.setItem('fisikaAppSession', JSON.stringify(currentUserData));
+
+                renderStudentMenu();
+                let msg = `Kamu mendapat nilai ${score}.`;
+                if (score === 100) msg += ' Luar biasa, semua benar!';
+                else if (score > 0) msg += ' Masih ada yang salah, tingkatkan lagi!';
+                else msg += ' Tetap semangat, pelajari materinya lagi ya!';
+                showModal('fas fa-star', 'Kuis Disimpan!', msg, score > 50 ? 'text-green-500' : 'text-yellow-500');
+            } catch (error) {
+                console.error('Gagal menyimpan hasil kuis:', error);
+                showModal('fas fa-times-circle', 'Gagal Menyimpan', error?.message || 'Terjadi kesalahan jaringan. Coba lagi.', 'text-red-500');
+            } finally {
+                if (btn) {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                 }

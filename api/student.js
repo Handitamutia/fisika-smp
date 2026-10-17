@@ -12,10 +12,15 @@ function score(value) {
   return Number.isFinite(result) && result >= 0 && result <= 100 ? result : undefined;
 }
 function now() { return new Intl.DateTimeFormat('id-ID', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Asia/Jakarta' }).format(new Date()); }
+function emptyToNull(value) { return value === '' || value === undefined || value === null ? null : value; }
 function toStudent(row) {
   return {
     uid: row.Email, name: row.Nama, className: row.Kelas, status: row.Status,
-    scores: { hydro: row['Nilai Hidrostatis'] ?? null, pascal: row['Nilai Pascal'] ?? null, archimedes: row['Nilai Archimedes'] ?? null }
+    scores: {
+      hydro: emptyToNull(row['Nilai Hidrostatis']),
+      pascal: emptyToNull(row['Nilai Pascal']),
+      archimedes: emptyToNull(row['Nilai Archimedes'])
+    }
   };
 }
 

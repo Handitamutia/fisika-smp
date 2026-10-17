@@ -32,7 +32,7 @@ Pada Vercel > Project > Settings > Environment Variables, isi untuk
 | --- | --- | --- |
 | `STEIN_API_URL` | Ya | URL storage SteinHQ di atas |
 | `STEIN_SHEET_NAME` | Ya | `DataSiswa` atau nama tab Anda |
-| `TEACHER_PASSWORD` | Ya | Kode panjang dan unik untuk login guru |
+| `STEIN_TEACHER_SHEET_NAME` | Ya | `guru` atau nama tab kredensial guru Anda |
 | `STEIN_USERNAME` | Jika Basic Auth aktif | Username SteinHQ |
 | `STEIN_PASSWORD` | Jika Basic Auth aktif | Password SteinHQ |
 
@@ -45,15 +45,18 @@ berlaku pada deployment baru.
 - `/guru.html` — halaman login dan rekap nilai guru.
 - `/api/health` — pemeriksaan konfigurasi dasar, tanpa menampilkan rahasia.
 
-Tombol **Masuk sebagai Guru** pada halaman siswa membuka `/guru.html`. Kode
-guru diproses Vercel dan tidak disimpan di JavaScript frontend.
+Tombol **Masuk sebagai Guru** pada halaman siswa membuka `/guru.html`.
+Tambahkan tab `guru` pada spreadsheet dengan header `Sandi | Password`; setiap
+baris setelahnya adalah satu akun guru. Kombinasi tersebut diverifikasi di
+Vercel dan tidak disimpan di JavaScript frontend.
 
 ## Uji
 
-1. Buka `https://domain-anda.vercel.app/api/health`; pastikan
-   `teacherLoginConfigured` bernilai `true`.
+1. Buka `https://domain-anda.vercel.app/api/health`; pastikan nilai
+   `teacherSheetName` cocok dengan nama tab kredensial guru.
 2. Buka halaman siswa di mode incognito, isi identitas, lalu selesaikan kuis.
-3. Buka `/guru.html`, masukkan `TEACHER_PASSWORD`, dan periksa nilai muncul.
+3. Buka `/guru.html`, masukkan `Sandi` dan `Password` dari tab `guru`, dan
+   periksa nilai muncul.
 4. Bila data tidak muncul, cek nama tab dan header Google Sheet di atas, lalu
    buka Vercel > Logs untuk melihat `student API error` atau `teacher API error`.
 

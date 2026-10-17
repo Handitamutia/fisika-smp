@@ -1,4 +1,4 @@
-import { sheetName, steinReady } from '../lib/stein.js';
+import { sheetName, steinReady, teacherSheetName } from '../lib/stein.js';
 
 export default function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false });
@@ -6,6 +6,6 @@ export default function handler(req, res) {
     ok: true,
     configured: steinReady(),
     sheetName: sheetName(),
-    teacherLoginConfigured: Boolean(process.env.TEACHER_PASSWORD)
+    teacherSheetName: teacherSheetName()
   });
 }
