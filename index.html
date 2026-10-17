@@ -450,10 +450,25 @@
             });
         }
 
+        // Hanya angka 0--100 yang merupakan nilai kuis sah. Ini juga membersihkan
+        // cache browser dari versi lama yang mungkin menyimpan spasi atau tanda '-'.
+        function validScore(value) {
+            if (value === undefined || value === null || String(value).trim() === '') return null;
+            const number = Number(String(value).trim());
+            return Number.isFinite(number) && number >= 0 && number <= 100 ? number : null;
+        }
+        function normalizeScores(scores = {}) {
+            return {
+                hydro: validScore(scores.hydro),
+                pascal: validScore(scores.pascal),
+                archimedes: validScore(scores.archimedes)
+            };
+        }
         // Status progres selalu dihitung dari nilai kuis yang benar-benar tersimpan.
         // Nilai 0 tetap dianggap sudah mengerjakan kuis.
-        function getLearningStatus(scores = {}) {
-            const hasScore = (value) => value !== undefined && value !== null && value !== '';
+        function getLearningStatus(rawScores = {}) {
+            const scores = normalizeScores(rawScores);
+            const hasScore = (value) => value !== null;
             const hydroDone = hasScore(scores.hydro);
             const pascalDone = hasScore(scores.pascal);
             const archimedesDone = hasScore(scores.archimedes);
@@ -488,7 +503,7 @@
                 currentUserData = JSON.parse(savedSession);
                 
                 // Perbaiki status tampilan berdasarkan skor yang tersimpan di sesi.
-                currentUserData.scores = currentUserData.scores || {};
+                currentUserData.scores = normalizeScores(currentUserData.scores);
                 currentUserData.status = getLearningStatus(currentUserData.scores);
 
                 // Sesi lama dari versi sebelumnya (yang punya dashboard guru)
@@ -505,7 +520,7 @@
                     // localStorage hanya cache; progres sebenarnya selalu dari Sheet.
                     const fresh = await saveStudent({ action: 'save', uid: currentUserData.uid });
                     if (fresh.success) {
-                        currentUserData = { ...fresh.data, role: 'student' };
+                        currentUserData = { ...fresh.data, scores: normalizeScores(fresh.data.scores), role: 'student' };
                         localStorage.setItem('fisikaAppSession', JSON.stringify(currentUserData));
                     }
                 } catch (error) {
@@ -551,7 +566,7 @@
                         throw new Error(result?.message || 'Server tidak mengembalikan data siswa.');
                     }
 
-                    const savedScores = result.data.scores || {};
+                    const savedScores = normalizeScores(result.data.scores);
                     currentUserData = {
                         ...result.data,
                         scores: savedScores,
@@ -628,11 +643,17 @@
         }
 
         function renderStudentMenu() {
-            const scores = currentUserData.scores || {};
-            const hasScore = (value) => value !== null && value !== undefined && value !== '';
+            const scores = normalizeScores(currentUserData.scores);
+            currentUserData.scores = scores;
+            const hasScore = (value) => value !== null;
             const hydroDone = hasScore(scores.hydro);
             const pascalDone = hasScore(scores.pascal);
             const archiDone = hasScore(scores.archimedes);
+
+            // Logout/login tanpa memuat ulang halaman sebelumnya dapat menyisakan
+            // tombol tersembunyi dari siswa lain. Kembalikan UI ke keadaan awal
+            // sebelum menerapkan progres siswa yang sedang aktif.
+            resetQuizState();
 
             // Updated for responsive horizontal layout on mobile
             navMenu.innerHTML = `
@@ -809,7 +830,7 @@
 
                 // Utamakan data hasil baca/simpan dari server, bukan cache lokal.
                 const serverData = result.data || {};
-                const confirmedScores = serverData.scores || mergedScores;
+                const confirmedScores = normalizeScores(serverData.scores || mergedScores);
                 currentUserData = {
                     ...currentUserData,
                     ...serverData,
@@ -844,8 +865,25 @@
                 disp.classList.remove('hidden');
                 disp.innerHTML = `<div class="flex items-center"><i class="fas fa-check-circle text-xl mr-3"></i> <div>Kuis telah diselesaikan.<br>Nilaimu: <strong class="text-lg">${score}</strong></div></div>`;
                 
-                document.querySelectorAll(`input[name^="${section.substring(0,4)}"]`).forEach(el => el.disabled = true);
+                document.querySelectorAll(questionInputs(section)).forEach(el => el.disabled = true);
             }
+        }
+
+        function questionInputs(section) {
+            const prefix = section === 'archimedes' ? 'archi' : section;
+            return `input[name^="${prefix}"]`;
+        }
+
+        function resetQuizState() {
+            ['hydro', 'pascal', 'archimedes'].forEach((section) => {
+                const btn = document.getElementById(`btn-submit-${section}`);
+                const display = document.getElementById(`${section}-score-display`);
+                if (btn) { btn.style.display = ''; btn.disabled = false; }
+                if (display) { display.classList.add('hidden'); display.textContent = ''; }
+                document.querySelectorAll(questionInputs(section)).forEach(el => el.disabled = false);
+            });
+            document.getElementById('lock-pascal').style.display = '';
+            document.getElementById('lock-archimedes').style.display = '';
         }
 
         // 1. Hydrostatic
