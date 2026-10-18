@@ -28,12 +28,29 @@ function learningStatus(scores) {
   if (hydroDone) return 'Selesai Bab 1, Lanjut Bab 2';
   return 'Sedang Belajar (Bab 1)';
 }
+
+// Nilai hanya sah bila urutan babnya lengkap. Ini melindungi tampilan dari
+// data lama yang pernah tersimpan tidak berurutan.
+function sequentialScores(row) {
+  const hydro = storedScore(row['Nilai Hidrostatis']);
+  const pascal = hydro === null ? null : storedScore(row['Nilai Pascal']);
+  const archimedes = hydro === null || pascal === null ? null : storedScore(row['Nilai Archimedes']);
+  return { hydro, pascal, archimedes };
+}
+
+// Bersihkan nilai bab lanjutan yang tercatat sebelum prasyaratnya ada.
+function invalidScoreCleanup(row) {
+  const rawHydro = storedScore(row['Nilai Hidrostatis']);
+  const rawPascal = storedScore(row['Nilai Pascal']);
+  const rawArchimedes = storedScore(row['Nilai Archimedes']);
+  const set = {};
+  if (rawHydro === null && rawPascal !== null) set['Nilai Pascal'] = '';
+  if ((rawHydro === null || rawPascal === null) && rawArchimedes !== null) set['Nilai Archimedes'] = '';
+  return set;
+}
+
 function toStudent(row) {
-  const scores = {
-    hydro: storedScore(row['Nilai Hidrostatis']),
-    pascal: storedScore(row['Nilai Pascal']),
-    archimedes: storedScore(row['Nilai Archimedes'])
-  };
+  const scores = sequentialScores(row);
   return {
     uid: row.Email, name: row.Nama, className: row.Kelas, status: row.Status,
     scores,
@@ -47,12 +64,13 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method tidak diizinkan.' });
   try {
     const data = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-    if (data.action !== 'save') return res.status(400).json({ success: false, message: 'Aksi tidak dikenal.' });
+    if (!['save', 'submitQuiz'].includes(data.action)) return res.status(400).json({ success: false, message: 'Aksi tidak dikenal.' });
     const uid = email(data.uid);
     if (!uid) return res.status(400).json({ success: false, message: 'Email tidak valid.' });
 
     const found = await searchStudent(uid);
     if (!Array.isArray(found) || found.length === 0) {
+      if (data.action === 'submitQuiz') return res.status(404).json({ success: false, message: 'Sesi siswa tidak ditemukan. Silakan masuk kembali.' });
       const row = {
         Email: uid, Nama: text(data.name, 80) || 'Siswa', Kelas: className(data.className),
         Status: 'Sedang Belajar (Bab 1)',
@@ -63,11 +81,40 @@ export default async function handler(req, res) {
     }
 
     const current = found[0];
-    const set = { Diperbarui: now() };
-    const incoming = data.scores || {};
-    const hydro = score(incoming.hydro); if (hydro !== undefined) set['Nilai Hidrostatis'] = hydro;
-    const pascal = score(incoming.pascal); if (pascal !== undefined) set['Nilai Pascal'] = pascal;
-    const archimedes = score(incoming.archimedes); if (archimedes !== undefined) set['Nilai Archimedes'] = archimedes;
+    const cleanup = invalidScoreCleanup(current);
+
+    // Login/sinkronisasi hanya membaca data. Nilai tidak dapat lagi diubah
+    // dengan mengirim objek `scores` dari cache browser.
+    if (data.action === 'save') {
+      if (Object.keys(cleanup).length > 0) {
+        const cleaned = toStudent({ ...current, ...cleanup });
+        await updateStudent(uid, { ...cleanup, Status: cleaned.status, Diperbarui: now() });
+        return res.status(200).json({ success: true, data: cleaned });
+      }
+      return res.status(200).json({ success: true, data: toStudent(current) });
+    }
+
+    const section = String(data.section || '');
+    const value = score(data.score);
+    const scoreColumns = {
+      hydro: 'Nilai Hidrostatis',
+      pascal: 'Nilai Pascal',
+      archimedes: 'Nilai Archimedes'
+    };
+    if (!scoreColumns[section] || value === undefined) {
+      return res.status(400).json({ success: false, message: 'Nilai atau bab kuis tidak valid.' });
+    }
+
+    const currentScores = sequentialScores({ ...current, ...cleanup });
+    if (currentScores[section] !== null) {
+      return res.status(409).json({ success: false, message: 'Kuis bab ini sudah pernah disimpan dan tidak dapat dikirim ulang.' });
+    }
+    if ((section === 'pascal' && currentScores.hydro === null)
+      || (section === 'archimedes' && (currentScores.hydro === null || currentScores.pascal === null))) {
+      return res.status(403).json({ success: false, message: 'Selesaikan kuis bab sebelumnya terlebih dahulu.' });
+    }
+
+    const set = { ...cleanup, [scoreColumns[section]]: value, Diperbarui: now() };
     const saved = toStudent({ ...current, ...set });
     set.Status = saved.status;
     await updateStudent(uid, set);

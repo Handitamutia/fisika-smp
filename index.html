@@ -7,6 +7,7 @@
     <title>Platform Belajar Fisika: Fluida Statis</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="src/lesson-video.js" defer></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -502,6 +503,9 @@
                         Massa Jenis Cairan (kg/m³), g = Gravitasi (m/s²), h = Kedalaman (m)</p>
                 </div>
 
+                <lesson-video class="block mb-8" video-url="https://youtu.be/yiJ8Dp3A0fI?si=ArIm8nZZNVEGXgul"
+                    title="Video pembelajaran tekanan hidrostatis"></lesson-video>
+
                 <h3 class="text-lg md:text-xl font-bold text-slate-700 mb-4 flex items-center"><i
                         class="fas fa-flask text-blue-500 mr-2"></i>Simulasi Interaktif</h3>
                 <div
@@ -624,6 +628,9 @@
                         pipa penampang besar (A₂).</p>
                 </div>
 
+                <lesson-video class="block mb-8" video-url="https://www.youtube.com/watch?v=gKQvVF-Rrq0"
+                    title="Video pembelajaran tekanan hidrostatis"></lesson-video>
+
                 <h3 class="text-lg md:text-xl font-bold text-slate-700 mb-4 flex items-center"><i
                         class="fas fa-car text-purple-500 mr-2"></i>Simulasi Dongkrak Hidrolik</h3>
                 <div
@@ -739,6 +746,9 @@
                         dalam zat cair akan mengalami gaya ke atas (Gaya Apung) yang besarnya sama dengan berat zat cair
                         yang dipindahkan."</p>
                 </div>
+
+                <lesson-video class="block mb-8" video-url="https://youtu.be/au7Rg8FxFwY?si=-o1Ff2ps_f6cP5G_"
+                    title="Video pembelajaran archimedes"></lesson-video>
 
                 <h3 class="text-lg md:text-xl font-bold text-slate-700 mb-4 flex items-center"><i
                         class="fas fa-ship text-amber-500 mr-2"></i>Simulasi Apung & Tenggelam</h3>
@@ -936,10 +946,13 @@
             return Number.isFinite(number) && number >= 0 && number <= 100 ? number : null;
         }
         function normalizeScores(scores = {}) {
+            const hydro = validScore(scores.hydro);
+            const pascal = hydro === null ? null : validScore(scores.pascal);
+            const archimedes = hydro === null || pascal === null ? null : validScore(scores.archimedes);
             return {
-                hydro: validScore(scores.hydro),
-                pascal: validScore(scores.pascal),
-                archimedes: validScore(scores.archimedes)
+                hydro,
+                pascal,
+                archimedes
             };
         }
         // Status progres selalu dihitung dari nilai kuis yang benar-benar tersimpan.
@@ -1296,19 +1309,13 @@
             }
 
             try {
-                // Gabungkan nilai baru dengan nilai bab lain yang sudah ada.
-                const mergedScores = {
-                    ...(currentUserData.scores || {}),
-                    [section]: score
-                };
-                const calculatedStatus = getLearningStatus(mergedScores);
-
-                // Kirim seluruh skor supaya backend dapat menyimpan data secara konsisten.
+                // Server menerima satu nilai untuk satu bab dan memvalidasi
+                // urutan pengerjaan. Nilai cache bab lain tidak ikut dikirim.
                 const result = await saveStudent({
-                    action: 'save',
+                    action: 'submitQuiz',
                     uid: currentUserData.uid,
-                    scores: mergedScores,
-                    status: calculatedStatus
+                    section,
+                    score
                 });
 
                 if (!result?.success) {
@@ -1317,7 +1324,7 @@
 
                 // Utamakan data hasil baca/simpan dari server, bukan cache lokal.
                 const serverData = result.data || {};
-                const confirmedScores = normalizeScores(serverData.scores || mergedScores);
+                const confirmedScores = normalizeScores(serverData.scores || {});
                 currentUserData = {
                     ...currentUserData,
                     ...serverData,

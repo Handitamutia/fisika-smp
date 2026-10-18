@@ -17,11 +17,10 @@ function statusFromScores(scores) {
 // Rekap memakai nilai yang tervalidasi, bukan kolom Status yang bisa tertinggal
 // dari data lama di Sheet.
 function studentForTeacher(row) {
-  const scores = {
-    hydro: validScore(row['Nilai Hidrostatis']),
-    pascal: validScore(row['Nilai Pascal']),
-    archimedes: validScore(row['Nilai Archimedes'])
-  };
+  const hydro = validScore(row['Nilai Hidrostatis']);
+  const pascal = hydro === null ? null : validScore(row['Nilai Pascal']);
+  const archimedes = hydro === null || pascal === null ? null : validScore(row['Nilai Archimedes']);
+  const scores = { hydro, pascal, archimedes };
   return {
     ...row,
     Status: statusFromScores(scores),
