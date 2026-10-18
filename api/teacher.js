@@ -50,15 +50,15 @@ export default async function handler(req, res) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const username = String(body.username || '').trim();
     const password = String(body.password || '');
-    if (!username || !password) return res.status(400).json({ success: false, message: 'Sandi dan password wajib diisi.' });
+    if (!username || !password) return res.status(400).json({ success: false, message: 'Username dan password wajib diisi.' });
 
-    // Tab guru harus memiliki header: Sandi | Password.
+    // Tab guru harus memiliki header: Username | Password.
     const credentials = await getSheetRows(teacherSheetName());
     const authenticated = Array.isArray(credentials) && credentials.some((row) =>
-      equalsSecret(value(row, ['Sandi', 'sandi', 'Username', 'username']), username) &&
+      equalsSecret(value(row, ['Username', 'username']), username) &&
       equalsSecret(value(row, ['Password', 'password']), password)
     );
-    if (!authenticated) return res.status(401).json({ success: false, message: 'Kombinasi sandi atau password tidak valid.' });
+    if (!authenticated) return res.status(401).json({ success: false, message: 'Kombinasi username atau password tidak valid.' });
 
     const students = await getStudents();
     const normalizedStudents = Array.isArray(students) ? students.map(studentForTeacher) : [];
