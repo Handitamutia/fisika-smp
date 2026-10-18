@@ -39,6 +39,19 @@ Pada Vercel > Project > Settings > Environment Variables, isi untuk
 Setelah mengisi atau mengubah variable, lakukan redeploy. Variable baru hanya
 berlaku pada deployment baru.
 
+## Menjalankan secara lokal
+
+1. Pastikan Node.js versi 18 atau lebih baru tersedia. Salin `.env.example`
+   menjadi `.env`, lalu isi nilainya sesuai konfigurasi
+   SteinHQ yang dipakai untuk pengembangan. File `.env` tidak akan masuk Git.
+2. Jalankan `npm install` (cukup sekali setelah clone atau perubahan dependensi).
+3. Jalankan `npm run dev`, lalu buka `http://localhost:3000`.
+
+Server lokal ini menjalankan halaman dan endpoint `/api/*` bersama-sama,
+sehingga penyimpanan siswa dan login guru dapat diuji sebelum deploy. Hindari
+membuka `index.html` langsung dari file explorer karena endpoint API tidak
+akan tersedia.
+
 ## Halaman aplikasi
 
 - `/` atau `index.html` — halaman siswa.
