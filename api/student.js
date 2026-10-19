@@ -61,6 +61,24 @@ function toStudent(row) {
   };
 }
 
+function matchesUpdate(row, updates) {
+  return Object.entries(updates).every(([key, expected]) =>
+    String(row[key] ?? '').trim() === String(expected ?? '').trim()
+  );
+}
+
+async function updateAndConfirm(uid, updates) {
+  await updateStudent(uid, updates);
+  const rows = await searchStudent(uid);
+  const saved = Array.isArray(rows) ? rows.find((row) => email(row.Email) === uid) : null;
+  if (!saved || !matchesUpdate(saved, updates)) {
+    const error = new Error('Excel belum mengonfirmasi penyimpanan. Silakan coba kirim kembali; nilai belum ditandai tersimpan.');
+    error.code = 'PERSISTENCE_UNCONFIRMED';
+    throw error;
+  }
+  return saved;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method tidak diizinkan.' });
   try {
@@ -78,7 +96,14 @@ export default async function handler(req, res) {
         'Nilai Hidrostatis': '', 'Nilai Pascal': '', 'Nilai Archimedes': '', Diperbarui: now()
       };
       await appendStudent(row);
-      return res.status(200).json({ success: true, data: toStudent(row) });
+      const savedRows = await searchStudent(uid);
+      const saved = Array.isArray(savedRows) ? savedRows.find((item) => email(item.Email) === uid) : null;
+      if (!saved || !matchesUpdate(saved, row)) {
+        const error = new Error('Excel belum mengonfirmasi pembuatan data siswa. Silakan masuk kembali.');
+        error.code = 'PERSISTENCE_UNCONFIRMED';
+        throw error;
+      }
+      return res.status(200).json({ success: true, data: toStudent(saved) });
     }
 
     const current = found[0];
@@ -94,8 +119,9 @@ export default async function handler(req, res) {
       const updates = { ...cleanup, ...classUpdate };
       if (Object.keys(updates).length > 0) {
         const updated = toStudent({ ...current, ...updates });
-        await updateStudent(uid, { ...updates, Status: updated.status, Diperbarui: now() });
-        return res.status(200).json({ success: true, data: updated });
+        const changes = { ...updates, Status: updated.status, Diperbarui: now() };
+        const saved = await updateAndConfirm(uid, changes);
+        return res.status(200).json({ success: true, data: toStudent(saved) });
       }
       return res.status(200).json({ success: true, data: toStudent(current) });
     }
@@ -113,6 +139,9 @@ export default async function handler(req, res) {
 
     const currentScores = sequentialScores({ ...current, ...cleanup });
     if (currentScores[section] !== null) {
+      if (currentScores[section] === value) {
+        return res.status(200).json({ success: true, data: toStudent(current) });
+      }
       return res.status(409).json({ success: false, message: 'Kuis bab ini sudah pernah disimpan dan tidak dapat dikirim ulang.' });
     }
     if ((section === 'pascal' && currentScores.hydro === null)
@@ -121,15 +150,16 @@ export default async function handler(req, res) {
     }
 
     const set = { ...cleanup, [scoreColumns[section]]: value, Diperbarui: now() };
-    const saved = toStudent({ ...current, ...set });
-    set.Status = saved.status;
-    await updateStudent(uid, set);
-    return res.status(200).json({ success: true, data: saved });
+    const expected = toStudent({ ...current, ...set });
+    set.Status = expected.status;
+    const saved = await updateAndConfirm(uid, set);
+    return res.status(200).json({ success: true, data: toStudent(saved) });
   } catch (error) {
     console.error('student API error', { status: error?.status, message: error?.message });
-    const message = error?.status === 401 ? 'SteinHQ menolak kredensial API. Periksa STEIN_USERNAME dan STEIN_PASSWORD di Vercel.'
+    const message = error?.code === 'PERSISTENCE_UNCONFIRMED' ? error.message
+      : error?.status === 401 ? 'SteinHQ menolak kredensial API. Periksa STEIN_USERNAME dan STEIN_PASSWORD di Vercel.'
       : error?.status === 404 ? 'Sheet DataSiswa tidak ditemukan di SteinHQ. Periksa nama tab sheet dan STEIN_SHEET_NAME.'
       : 'Data tidak dapat disimpan. Periksa SteinHQ dan konfigurasi deployment.';
-    return res.status(500).json({ success: false, message });
+    return res.status(error?.code === 'PERSISTENCE_UNCONFIRMED' ? 502 : 500).json({ success: false, message });
   }
 }
