@@ -5,7 +5,8 @@ function email(value) {
   const result = text(value, 254).toLowerCase();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(result) ? result : '';
 }
-function className(value) { return ['9A', '9B', '9C', '9D'].includes(value) ? value : '-'; }
+const validClasses = ['IX-4', 'IX-5', 'IX-6', 'IX-7', 'IX-8', 'IX-9'];
+function className(value) { return validClasses.includes(value) ? value : '-'; }
 function score(value) {
   // SteinHQ dapat mengembalikan sel kosong sebagai string berisi spasi.
   // Jangan mengubahnya menjadi Number(' ') === 0, karena 0 adalah nilai kuis
@@ -82,14 +83,19 @@ export default async function handler(req, res) {
 
     const current = found[0];
     const cleanup = invalidScoreCleanup(current);
+    const requestedClass = className(data.className);
+    const classUpdate = className(current.Kelas) === '-' && requestedClass !== '-'
+      ? { Kelas: requestedClass }
+      : {};
 
-    // Login/sinkronisasi hanya membaca data. Nilai tidak dapat lagi diubah
-    // dengan mengirim objek `scores` dari cache browser.
+    // Login tidak menerima perubahan nilai dari cache browser. Kelas lama yang
+    // tidak valid diperbaiki dari pilihan kelas pada formulir masuk.
     if (data.action === 'save') {
-      if (Object.keys(cleanup).length > 0) {
-        const cleaned = toStudent({ ...current, ...cleanup });
-        await updateStudent(uid, { ...cleanup, Status: cleaned.status, Diperbarui: now() });
-        return res.status(200).json({ success: true, data: cleaned });
+      const updates = { ...cleanup, ...classUpdate };
+      if (Object.keys(updates).length > 0) {
+        const updated = toStudent({ ...current, ...updates });
+        await updateStudent(uid, { ...updates, Status: updated.status, Diperbarui: now() });
+        return res.status(200).json({ success: true, data: updated });
       }
       return res.status(200).json({ success: true, data: toStudent(current) });
     }
